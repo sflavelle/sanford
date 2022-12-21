@@ -82,6 +82,28 @@ async def quote(interaction: discord.Interaction):
 
 @sanford.tree.context_menu(name='Save as quote!')
 async def quote_save(interaction: discord.Interaction, message: discord.Message):
-    await interaction.response.send_message('One day, mate...',ephemeral=True)
+    try:
+        sql_values = (
+            message.content, 
+            message.author.id,
+            message.author.name,
+            interaction.user.id,
+            interaction.guild_id,
+            message.id,
+            datetime.timestamp(message.created_at),
+            datetime.now().strftime("%Y-%m-%d %H:%M::%S.%f %z"),
+            datetime.now().strftime("%Y-%m-%d %H:%M::%S.%f %z")
+            )
+        
+        cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
+        con.commit()
+
+        await interaction.response.send_message(
+            "`Quoted successfully!`\n\n"
+            + quote_string.format(message.content, message.author.id, message.created_at.strftime("%B %d, %Y")),
+            allowed_mentions=discord.AllowedMentions.none()
+            )
+    except sqlite3.Error as error:
+        await interaction.response.send_message('Error: Failed due to:\n' + str(error),ephemeral=True)
 
 sanford.run(cfg['sanford']['discord_token'])
