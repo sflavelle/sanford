@@ -90,7 +90,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
             interaction.user.id,
             interaction.guild_id,
             message.id,
-            datetime.timestamp(message.created_at),
+            int(datetime.timestamp(message.created_at)),
             datetime.now().strftime("%Y-%m-%d %H:%M::%S.%f %z"),
             datetime.now().strftime("%Y-%m-%d %H:%M::%S.%f %z")
             )
