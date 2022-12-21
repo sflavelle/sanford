@@ -21,7 +21,7 @@ intents.message_content = True
 TGC = discord.Object(id=124680630075260928)
 
 quote_string = '''"{0}"
-    —{1} / {2}'''
+    —<@{1}> / {2}'''
 
 # setup command framework
 class Sanford(discord.Client):
@@ -78,7 +78,7 @@ async def quote(interaction: discord.Interaction):
         dateprint = date.strftime("%B %d, %Y")
 
     # Finally, send the resulting quote
-    await interaction.response.send_message(quote_string.format(content,aName,dateprint))
+    await interaction.response.send_message(quote_string.format(content,aID,dateprint),allowed_mentions=discord.AllowedMentions.none())
 
 @sanford.tree.context_menu(name='Save as quote!')
 async def quote_save(interaction: discord.Interaction, message: discord.Message):

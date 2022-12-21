@@ -3,7 +3,7 @@ import yaml
 import sqlite3
 import re
 
-con = sqlite3.connect("../data/quotes.sqlite")
+con = sqlite3.connect("db/quotes.sqlite")
 cur = con.cursor()
 
 import schedule
