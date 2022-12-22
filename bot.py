@@ -82,7 +82,14 @@ async def quote(interaction: discord.Interaction):
 
 @sanford.tree.context_menu(name='Save as quote!')
 async def quote_save(interaction: discord.Interaction, message: discord.Message):
+
     try:
+
+        # Check for duplicates first
+        check_dupe = cur.execute("SELECT 1 from quotes WHERE msgID='" + str(message.id) + "'")
+        if check_dupe.fetchone() is not None:
+            raise LookupError('This quote is already in the database.')
+
         sql_values = (
             message.content, 
             message.author.id,
@@ -91,19 +98,23 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
             interaction.guild_id,
             message.id,
             int(datetime.timestamp(message.created_at)),
-            datetime.now().strftime("%Y-%m-%d %H:%M::%S.%f %z"),
-            datetime.now().strftime("%Y-%m-%d %H:%M::%S.%f %z")
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z")
             )
         
         cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
         con.commit()
 
+        status = discord.Embed(description=f'[Quote]({message.jump_url}) saved successfully.')
+
         await interaction.response.send_message(
-            "`Quoted successfully!`\n\n"
-            + quote_string.format(message.content, message.author.id, message.created_at.strftime("%B %d, %Y")),
+            quote_string.format(message.content, message.author.id, message.created_at.strftime("%B %d, %Y")),
+            embed=status,
             allowed_mentions=discord.AllowedMentions.none()
             )
     except sqlite3.Error as error:
-        await interaction.response.send_message('Error: Failed due to:\n' + str(error),ephemeral=True)
+        await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
+    except LookupError as error:
+        await interaction.response.send_message('Good News! This quote was already saved.',ephemeral=True)
 
 sanford.run(cfg['sanford']['discord_token'])
