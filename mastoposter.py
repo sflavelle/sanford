@@ -48,6 +48,8 @@ def post():
             aName = "spicy"
         case "250947682758164491":
             aName = "Sanford"
+        case "211125155194208257":
+            aName = "Beatbot"
         case "64612757739147264":
             aName = "vidvisionify"
         case "186902083021045762":
