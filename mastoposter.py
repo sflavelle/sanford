@@ -2,6 +2,7 @@ from mastodon import Mastodon
 import yaml
 import sqlite3
 import re
+import argparse
 
 con = sqlite3.connect("db/quotes.sqlite")
 cur = con.cursor()
@@ -9,6 +10,15 @@ cur = con.cursor()
 import schedule
 import time
 from datetime import datetime
+
+from helpers.quoting import format_quote,fetch_random_quote
+
+arguments =  argparse.ArgumentParser(
+    description= 'Posts quotes to Mastodon every 2 hours!'
+)
+
+arguments.add_argument('--debug', action='store_true', help='Debug mode. Posts every two minutes instead')
+args = arguments.parse_args()
 
 # load config
 with open('config.yaml', 'r') as file:
@@ -23,19 +33,12 @@ post_string = '''"{0}"
     —{1} / {2}'''
 
 def post():
-    quote = cur.execute("SELECT content,authorID,authorName,timestamp FROM quotes WHERE guild='124680630075260928' AND authorID != '' OR authorName = 'The General Chat' ORDER BY random() LIMIT 1")
-    content,aID,aName,timestamp = quote.fetchone()
+    content,aID,aName,timestamp = fetch_random_quote("db/quotes.sqlite",124680630075260928)
 
     content = re.sub("<(:\S+:)\d+>","\g<1>",content)
     
     # Console logging
     print("'" + content + "' - " + aName + " (ID " + aID + ", timestamp " + str(timestamp) + ")")
-
-    # Truncate timestamp length if timestamp
-    # includes milliseconds (like Discord does)
-
-    if len(str(timestamp)) > 10:
-        timestamp = timestamp / (10 ** (len(str(timestamp)) - 10))
 
     # If authorname is empty for some reason
     # map the authorID to a name
@@ -87,18 +90,18 @@ def post():
         case _:
             aName = "(@splatsune@thegeneral.chat didn't map this user's ID. SHAME! This quoted user's ID is " + aID + ")"
 
-    if bool(timestamp) == False:
-        dateprint = "Octember 32, " + str(datetime.today().year)
-    else:
-        date = datetime.fromtimestamp(timestamp)
-        dateprint = date.strftime("%B %d, %Y")
+    quote = format_quote(content,authorName=aName,timestamp=timestamp)
         
-    mastodon.status_post(post_string.format(content,aName,dateprint))
+    mastodon.status_post(quote)
 
-# Schedule to run every 2 hours
-schedule.every(2).hours.at("00:00").do(post)
-# Schedule to run every 3 minutes (for testing)
-# schedule.every(3).minutes.do(post)
+if args.debug == True:
+    # Schedule to run every 3 minutes (for testing)
+    print('Debug Mode: Posting every 2 minutes')
+    schedule.every(2).minutes.do(post)
+else:
+    # Schedule to run every 2 hours
+    print('Posting every 2 hours')
+    schedule.every(2).hours.at("00:00").do(post)
 
 while True:
     schedule.run_pending()
