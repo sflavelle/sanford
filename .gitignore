@@ -2,3 +2,4 @@
 /config.yaml
 /db
 sanford.code-workspace
+**.pyc
