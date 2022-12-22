@@ -6,22 +6,21 @@ from datetime import datetime
 import yaml
 # Quote-related libraries
 import sqlite3
+# Import custom libraries
+from helpers.quoting import format_quote,fetch_random_quote
 
-# init sqlite db connection
-con = sqlite3.connect("db/quotes.sqlite")
-cur = con.cursor()
 # load config
 with open('config.yaml', 'r') as file:
     cfg = yaml.safe_load(file)
+
+# set variables
+db = "db/quotes.sqlite"
 
 # configure subscribed intents
 intents = discord.Intents.default()
 intents.message_content = True
 
 TGC = discord.Object(id=124680630075260928)
-
-quote_string = '''"{0}"
-    —<@{1}> / {2}'''
 
 # setup command framework
 class Sanford(discord.Client):
@@ -48,7 +47,8 @@ sanford = Sanford(intents=intents)
 
 @sanford.event
 async def on_ready():
-    print(f"We're in B) I am {sanford.user} (ID: {sanford.user.id})")
+    print("We're in B)")
+    print(f"I am {sanford.user} (ID: {sanford.user.id})")
     print('------')
 
 @sanford.tree.command()
@@ -59,31 +59,18 @@ async def poke(interaction: discord.Interaction):
 @sanford.tree.command()
 async def quote(interaction: discord.Interaction):
     """Get a random quote!"""
-    
-    # Fetch a random quote from the SQL database
-    quote = cur.execute("SELECT content,authorID,authorName,timestamp FROM quotes WHERE guild='" + str(interaction.guild.id) + "' AND authorID != '' ORDER BY random() LIMIT 1")
-    content,aID,aName,timestamp = quote.fetchone()
+    content,aID,aName,timestamp = fetch_random_quote("db/quotes.sqlite",interaction.guild_id)
 
-    # Adjust timestamp if milliseconds included
-    # For parsing later
-    if len(str(timestamp)) > 10:
-        timestamp = timestamp / (10 ** (len(str(timestamp)) - 10))
-
-    # No timestamp? Fudge one
-    if bool(timestamp) == False:
-        dateprint = "Octember 32, " + str(datetime.today().year)
-    else:
-    # Else generate a date string
-        date = datetime.fromtimestamp(timestamp)
-        dateprint = date.strftime("%B %d, %Y")
-
+    quote = format_quote(content,authorID=aID,timestamp=timestamp)
     # Finally, send the resulting quote
-    await interaction.response.send_message(quote_string.format(content,aID,dateprint),allowed_mentions=discord.AllowedMentions.none())
+    await interaction.response.send_message(quote,allowed_mentions=discord.AllowedMentions.none())
 
 @sanford.tree.context_menu(name='Save as quote!')
 async def quote_save(interaction: discord.Interaction, message: discord.Message):
 
     try:
+        con = sqlite3.connect(db)
+        cur = con.cursor()
 
         # Check for duplicates first
         check_dupe = cur.execute("SELECT 1 from quotes WHERE msgID='" + str(message.id) + "'")
@@ -108,10 +95,13 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         status = discord.Embed(description=f'[Quote]({message.jump_url}) saved successfully.')
 
         await interaction.response.send_message(
-            quote_string.format(message.content, message.author.id, message.created_at.strftime("%B %d, %Y")),
+            format_quote(message.content, authorID=message.author.id, timestamp=int(message.created_at.timestamp())),
             embed=status,
             allowed_mentions=discord.AllowedMentions.none()
             )
+        
+        con.close()
+
     except sqlite3.Error as error:
         await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
     except LookupError as error:
