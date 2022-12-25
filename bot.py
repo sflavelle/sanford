@@ -37,10 +37,9 @@ class Sanford(discord.Client):
         # maintain its own tree instead.
         self.tree = app_commands.CommandTree(self)
     
-    # Sync all cmds to General Chat only (for now)
     async def setup_hook(self):
-        self.tree.copy_global_to(guild=TGC)
-        await self.tree.sync(guild=TGC)
+        # self.tree.copy_global_to(guild=TGC) # Sync all cmds to General Chat only (for now)
+        await self.tree.sync()
 
 # init client
 sanford = Sanford(intents=intents)
@@ -52,6 +51,7 @@ async def on_ready():
     print('------')
 
 @sanford.tree.command()
+@app_commands.guilds(TGC)
 async def poke(interaction: discord.Interaction):
     """Maybe see if Sanford is around?"""
     await interaction.response.send_message('`Mhhh. Come back later...`')
