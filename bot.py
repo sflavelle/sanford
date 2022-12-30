@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from pluralkit import Client as PK
-import asyncio
+import requests
 from typing import Optional
 from datetime import datetime
 import yaml
@@ -118,11 +118,26 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
             ))
 
         # # PluralKit check
-        # if message.webhook_id:
-        #     pkmsg = pluralkit.get_message(message.id)
-        #     print(pkmsg)
-        #     if pkmsg is not None:
-        #         sql_values[1] = int(pkmsg.sender)
+        if message.webhook_id:
+            try:
+                pkmsg = pluralkit.get_message(message.id)
+                print(pkmsg)
+                if pkmsg is not None:
+                    sql_values[1] = int(pkmsg.sender)
+            except AttributeError as error:
+                print("Fetching PluralKit member from message failed - message too old?")
+                try:
+                    pkauthor = message.author.name
+                    for k,v in cfg['sanford']['pluralkit_mapping']:
+                        if v in pkauthor:
+                            # Found our author!
+                            sql_values[1] = int(k)
+                            break
+                    else:
+                        raise KeyError("Could not find a user ID to map this message to.")
+                except KeyError as error:
+                    print(f"Could not fetch webhook msg author for '{message.author.name}'")
+                    await interaction.response.send_message(error,ephemeral=True)
         
         cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
         con.commit()
