@@ -2,16 +2,35 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from pluralkit import Client as PK
-import requests
-from typing import Optional
 from datetime import datetime
 import yaml
-# Quote-related libraries
+import sys
+import os
+import logging
+import logging.handlers
+# Other helpful libraries
+from pluralkit import Client as PK
 import sqlite3
+from dateutil.parser import *
+import dateutil
 # Import custom libraries
 from helpers.quoting import format_quote,fetch_random_quote
 from mastoposter import post_new_quote
+
+# setup logging
+logger = logging.getLogger('discord')
+logger.setLevel(logging.INFO)
+
+handler = logging.handlers.RotatingFileHandler(
+    filename='logs/sanford.log',
+    encoding='utf-8',
+    maxBytes=8 * 1024 * 1024,  # 32 MiB
+    backupCount=10,  # Rotate through 5 files
+)
+dt_fmt = '%Y-%m-%d %H:%M:%S'
+formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style='{')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 # init vars?
 cfg = None
@@ -27,48 +46,38 @@ db = "db/quotes.sqlite"
 intents = discord.Intents.default()
 intents.message_content = True
 
-Owner = discord.Object(id=49288117307310080)
+# Define common targets
 TGC = discord.Object(id=124680630075260928)
 
 # setup command framework
-class Sanford(discord.Client):
-    def __init__(self, *, intents: discord.Intents):
-        super().__init__(intents=intents)
-        # From https://github.com/Rapptz/discord.py/blob/v2.1.0/examples/app_commands/basic.py :
-
-        # A CommandTree is a special type that holds all the application command
-        # state required to make it work. This is a separate class because it
-        # allows all the extra state to be opt-in.
-        # Whenever you want to work with application commands, your tree is used
-        # to store and work with them.
-        # Note: When using commands.Bot instead of discord.Client, the bot will
-        # maintain its own tree instead.
-        self.tree = app_commands.CommandTree(self)
-    
-    async def setup_hook(self):
-        # self.tree.copy_global_to(guild=TGC) # Sync all cmds to General Chat only (for now)
-        await self.tree.sync(guild=TGC)
-        await self.tree.sync()
-
-# init client
-sanford = Sanford(intents=intents)
+sanford = commands.Bot(command_prefix="&",intents=intents)
 
 # init Pluralkit API
 pluralkit = PK(cfg['sanford']['pluralkit_token'])
 
-@sanford.event
-async def on_ready():
-    print("We're in B)")
-    print(f"I am {sanford.user} (ID: {sanford.user.id})")
-    print('------')
+@sanford.command()
+@commands.is_owner()
+async def cmdsync(ctx):
+    logging.info("Syncing commands to Discord.")
+    await sanford.tree.sync()
+    await sanford.tree.sync(guild=TGC)
+    logging.info("Command syncing complete!")
+    await ctx.send("Done.")
+
+@sanford.command()
+@commands.is_owner()
+async def reboot(ctx):
+    await ctx.send("Reloading the bot...")
+    logging.warning("Rebooting the bot!")
+    os.execv(sys.executable,['python3.11'] + sys.argv)
 
 @sanford.tree.command()
 @app_commands.guilds(TGC)
 @app_commands.rename(exclude_in_mastoposter='dont_send_quotes')
 @app_commands.describe(exclude_in_mastoposter="Exclude your quotes from being posted to @tgcooc?")
 async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: bool):
-    global cfg
     """Configure settings relating to you in the @tgcooc Mastodon account."""
+    global cfg
     try:
         if exclude_in_mastoposter is not None:
             if exclude_in_mastoposter == True:
@@ -78,20 +87,70 @@ async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: boo
                 yaml.dump(cfg, file)
             with open('config.yaml', 'r') as file:
                 cfg = yaml.safe_load(file)
-            print(f"/mastodon: {interaction.user.name} added themselves to the excluded_users list")
+            logging.info(f"/mastodon: {interaction.user.name} added themselves to the excluded_users list")
             await interaction.response.send_message("Your settings were updated.",ephemeral=True)
     except io.UnsupportedOperation as error:
+        logging.error("Issue reading the config file!", error)
         await interaction.response.send_message("There was an issue reading the file.",ephemeral=True)
 
+quote_group = app_commands.Group(name='quote',description='Save or recall memorable messages')
 
-@sanford.tree.command()
-async def quote(interaction: discord.Interaction):
+@quote_group.command(name="get")
+async def quote_get(interaction: discord.Interaction):
     """Get a random quote!"""
     content,aID,aName,timestamp = fetch_random_quote("db/quotes.sqlite",interaction.guild_id)
 
     quote = format_quote(content,authorID=aID,timestamp=timestamp)
     # Finally, send the resulting quote
     await interaction.response.send_message(quote,allowed_mentions=discord.AllowedMentions.none())
+
+@quote_group.command(name="add")
+@app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened')
+async def quote_addbyhand(interaction: discord.Interaction, author: discord.Member, content: str, time: str=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z")):
+    try:
+        con = sqlite3.connect(db)
+        cur = con.cursor()
+        
+        # Parse entered timestamp
+        timestamp = parse(time, default=datetime.now())
+        
+        sql_values = list((
+            content,
+            author.id,
+            author.name,
+            interaction.user.id,
+            interaction.guild_id,
+            None,
+            int(datetime.timestamp(timestamp)),
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z")
+        ))
+        
+        cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
+        con.commit()
+
+        status = discord.Embed(description=f'Quote saved successfully.')
+
+        logging.info("Quote saved successfully")
+        logging.debug(format_quote(content, authorName=author.name, timestamp=int(datetime.timestamp(timestamp))))
+
+        await interaction.response.send_message(
+            format_quote(content, authorID=author.id, timestamp=int(datetime.timestamp(timestamp))),
+            embed=status,
+            allowed_mentions=discord.AllowedMentions.none()
+            )
+        
+        if interaction.guild_id == 124680630075260928 and author.id not in cfg['mastodon']['exclude_users']:
+            post_new_quote(content, author.id, int(datetime.timestamp(timestamp)))
+        
+        con.close()
+    except sqlite3.Error as error:
+        await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
+        logging.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
+    except dateutil.parser._parser.ParserError as error:
+        await interaction.response.send_message(f'Error: {error}',ephemeral=True)
+        
+sanford.tree.add_command(quote_group)
 
 @sanford.tree.context_menu(name='Save as quote!')
 async def quote_save(interaction: discord.Interaction, message: discord.Message):
@@ -125,31 +184,32 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
                 if pkmsg is not None:
                     sql_values[1] = int(pkmsg.sender)
             except AttributeError as error:
-                print("Fetching PluralKit member from message failed - message too old?")
+                logging.error("Fetching PluralKit author from message failed - message too old?")
                 try:
+                    logging.info("Trying to infer author from name substring...")
                     pkauthor = message.author.name
                     for k,v in cfg['sanford']['pluralkit_mapping'].items():
                         if v in pkauthor:
                             # Found our author!
-                            print(f"Found 'em: Author is ID {k}")
+                            logging.info(f"Found 'em: Author is ID {k}")
                             sql_values[1] = int(k)
                             break
                     else:
                         raise KeyError("Could not find a user ID to map this message to.")
                 except KeyError as error:
-                    print(f"Could not fetch webhook msg author for '{message.author.name}'")
+                    logging.error(f"Could not fetch webhook msg author for '{message.author.name}'")
                     await interaction.response.send_message(error,ephemeral=True)
                 except TypeError as error:
                     await interaction.response.send_message(error.with_traceback,ephemeral=True)
-                    Owner = sanford.get_user(49288117307310080)
-                    await Owner.send(f"Error while fetching a PK message's author:\n{error.with_traceback}")
+                    logging.error("TypeError somewhere in the PK check code!", error.with_traceback)
         
         cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
         con.commit()
 
         status = discord.Embed(description=f'[Quote]({message.jump_url}) saved successfully.')
 
-        print(format_quote(message.content, authorName=message.author.name, timestamp=int(message.created_at.timestamp())),)
+        logging.info("Quote saved successfully")
+        logging.debug(format_quote(message.content, authorName=message.author.name, timestamp=int(message.created_at.timestamp())),)
 
         await interaction.response.send_message(
             format_quote(message.content, authorID=(sql_values[1] if message.webhook_id else message.author.id), timestamp=int(message.created_at.timestamp())),
@@ -164,8 +224,13 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 
     except sqlite3.Error as error:
         await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
-        print("QUOTE SQL ERROR:\n" + str(error.with_traceback))
+        logging.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
     except LookupError as error:
         await interaction.response.send_message('Good News! This quote was already saved.',ephemeral=True)
+        logging.info("Quote was already saved previously")
 
-sanford.run(cfg['sanford']['discord_token'])
+@sanford.event
+async def on_ready():
+    logging.info(f"Logged in. I am {sanford.user} (ID: {sanford.user.id})")
+
+sanford.run(cfg['sanford']['discord_token'], log_handler=handler, log_level=logging.INFO)
