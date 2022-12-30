@@ -40,7 +40,7 @@ def rename_user(id):
         case "211125155194208257":
             return "Beatbot"
         case "64612757739147264":
-            return "vidvisionify"
+            return "@vidvisionify@mas.to"
         case "186902083021045762":
             return "sam"
         case "64598978380955648":
@@ -68,7 +68,7 @@ def rename_user(id):
         case "206536805997084677":
             return "unlobito"
         case "49288117307310080":
-            return "Splatsune"
+            return "@splatsune@thegeneral.chat"
         case "264242512565108736":
             return "Quetz"
         case "187009387813011457":
