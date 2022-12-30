@@ -54,7 +54,7 @@ class Sanford(discord.Client):
 sanford = Sanford(intents=intents)
 
 # init Pluralkit API
-pluralkit = PK(cfg['sanford']['pluralkit_token'], async_mode=False)
+pluralkit = PK(cfg['sanford']['pluralkit_token'])
 
 @sanford.event
 async def on_ready():
@@ -120,7 +120,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         # # PluralKit check
         if message.webhook_id:
             try:
-                pkmsg = pluralkit.get_message(message.id)
+                pkmsg = await pluralkit.get_message(message.id)
                 print(pkmsg)
                 if pkmsg is not None:
                     sql_values[1] = int(pkmsg.sender)
@@ -128,9 +128,10 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
                 print("Fetching PluralKit member from message failed - message too old?")
                 try:
                     pkauthor = message.author.name
-                    for k,v in cfg['sanford']['pluralkit_mapping']:
+                    for k,v in cfg['sanford']['pluralkit_mapping'].items():
                         if v in pkauthor:
                             # Found our author!
+                            print(f"Found 'em: Author is ID {k}")
                             sql_values[1] = int(k)
                             break
                     else:
@@ -138,6 +139,10 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
                 except KeyError as error:
                     print(f"Could not fetch webhook msg author for '{message.author.name}'")
                     await interaction.response.send_message(error,ephemeral=True)
+                except TypeError as error:
+                    await interaction.response.send_message(error.with_traceback,ephemeral=True)
+                    Owner = sanford.get_user(49288117307310080)
+                    await Owner.send(f"Error while fetching a PK message's author:\n{error.with_traceback}")
         
         cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
         con.commit()
@@ -147,13 +152,13 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         print(format_quote(message.content, authorName=message.author.name, timestamp=int(message.created_at.timestamp())),)
 
         await interaction.response.send_message(
-            format_quote(message.content, authorID=message.author.id, timestamp=int(message.created_at.timestamp())),
+            format_quote(message.content, authorID=(sql_values[1] if message.webhook_id else message.author.id), timestamp=int(message.created_at.timestamp())),
             embed=status,
             allowed_mentions=discord.AllowedMentions.none()
             )
         
         if interaction.guild_id == 124680630075260928 and message.author.id not in cfg['mastodon']['exclude_users']:
-            post_new_quote(message.content, message.author.id, int(message.created_at.timestamp()))
+            post_new_quote(message.content, (sql_values[1] if message.webhook_id else message.author.id), int(message.created_at.timestamp()))
         
         con.close()
 
