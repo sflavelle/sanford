@@ -25,10 +25,10 @@ mastodon = Mastodon(
 post_string = '''"{0}"
     —{1} / {2}'''
 
-def rename_user(id: str):
+def rename_user(id):
     # If authorname is empty for some reason
     # map the authorID to a name
-    match id:
+    match str(id):
         case "49345026618036224":
             return "itdiot"
         case "162712755445432321":
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
 
     def post():
-        content,aID,aName,timestamp = fetch_random_quote("db/quotes.sqlite",124680630075260928)
+        content,aID,aName,timestamp = fetch_random_quote("db/quotes.sqlite", 124680630075260928, cfg['mastodon']['exclude_users'])
 
         content = re.sub("<(:\S+:)\d+>","\g<1>",content)
         

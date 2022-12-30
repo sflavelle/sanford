@@ -26,12 +26,15 @@ def format_quote(content,timestamp,authorID=None,authorName=None):
     elif bool(authorName) and not bool(authorID):
         return quote_string_name.format(content,authorName,dateprint)
 
-def fetch_random_quote(db,gid):
+def fetch_random_quote(db: str,gid,exclude_list: list=list(())):
     con = sqlite3.connect(db)
     cur = con.cursor()
+    exclude = ""
+    if bool(exclude_list):
+        exclude = f"AND authorID NOT IN ({str(exclude_list).strip('[]')})"
 
     # Fetch a random quote from the SQL database
-    quote = cur.execute("SELECT content,authorID,authorName,timestamp FROM quotes WHERE guild='" + str(gid) + "' AND authorID != '' ORDER BY random() LIMIT 1")
+    quote = cur.execute(f"SELECT content,authorID,authorName,timestamp FROM quotes WHERE guild='{str(gid)}' AND authorID != '' {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
     content,aID,aName,timestamp = quote.fetchone()
     con.close()
     return (content, aID, aName, timestamp)
