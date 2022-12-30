@@ -1,5 +1,8 @@
 sanford:
   discord_token: Just.A.Fake.Token
+  pluralkit_token: Another.FakeToken
 mastodon:
   access_token: abcDEfGhiJKlmnopqrsTuvWXYZ
   api_base_url: https://mastodon.social
+  exclude_users:
+    - 49288117307310080
