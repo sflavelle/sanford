@@ -8,6 +8,7 @@ import yaml
 import sqlite3
 # Import custom libraries
 from helpers.quoting import format_quote,fetch_random_quote
+from mastoposter import post_new_quote
 
 # load config
 with open('config.yaml', 'r') as file:
@@ -99,6 +100,9 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
             embed=status,
             allowed_mentions=discord.AllowedMentions.none()
             )
+        
+        if interaction.guild_id == 124680630075260928:
+            post_new_quote(message.content, message.author.id, int(message.created_at.timestamp()))
         
         con.close()
 
