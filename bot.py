@@ -78,6 +78,7 @@ async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: boo
                 yaml.dump(cfg, file)
             with open('config.yaml', 'r') as file:
                 cfg = yaml.safe_load(file)
+            print(f"/mastodon: {interaction.user.name} added themselves to the excluded_users list")
             await interaction.response.send_message("Your settings were updated.",ephemeral=True)
     except io.UnsupportedOperation as error:
         await interaction.response.send_message("There was an issue reading the file.",ephemeral=True)
@@ -128,6 +129,8 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 
         status = discord.Embed(description=f'[Quote]({message.jump_url}) saved successfully.')
 
+        print(format_quote(message.content, authorName=message.author.name, timestamp=int(message.created_at.timestamp())),)
+
         await interaction.response.send_message(
             format_quote(message.content, authorID=message.author.id, timestamp=int(message.created_at.timestamp())),
             embed=status,
@@ -141,6 +144,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 
     except sqlite3.Error as error:
         await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
+        print("QUOTE SQL ERROR:\n" + str(error.with_traceback))
     except LookupError as error:
         await interaction.response.send_message('Good News! This quote was already saved.',ephemeral=True)
 
