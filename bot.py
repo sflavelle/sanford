@@ -58,17 +58,17 @@ pluralkit = PK(cfg['sanford']['pluralkit_token'])
 @sanford.command()
 @commands.is_owner()
 async def cmdsync(ctx):
-    logging.info("Syncing commands to Discord.")
+    logger.info("Syncing commands to Discord.")
     await sanford.tree.sync()
     await sanford.tree.sync(guild=TGC)
-    logging.info("Command syncing complete!")
+    logger.info("Command syncing complete!")
     await ctx.send("Done.")
 
 @sanford.command()
 @commands.is_owner()
 async def reboot(ctx):
     await ctx.send("Reloading the bot...")
-    logging.warning("Rebooting the bot!")
+    logger.warning("Rebooting the bot!")
     os.execv(sys.executable,['python3.11'] + sys.argv)
 
 @sanford.tree.command()
@@ -87,10 +87,10 @@ async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: boo
                 yaml.dump(cfg, file)
             with open('config.yaml', 'r') as file:
                 cfg = yaml.safe_load(file)
-            logging.info(f"/mastodon: {interaction.user.name} added themselves to the excluded_users list")
+            logger.info(f"/mastodon: {interaction.user.name} added themselves to the excluded_users list")
             await interaction.response.send_message("Your settings were updated.",ephemeral=True)
     except io.UnsupportedOperation as error:
-        logging.error("Issue reading the config file!", error)
+        logger.error("Issue reading the config file!", error)
         await interaction.response.send_message("There was an issue reading the file.",ephemeral=True)
 
 quote_group = app_commands.Group(name='quote',description='Save or recall memorable messages')
@@ -107,6 +107,7 @@ async def quote_get(interaction: discord.Interaction):
 @quote_group.command(name="add")
 @app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened')
 async def quote_addbyhand(interaction: discord.Interaction, author: discord.Member, content: str, time: str=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z")):
+    """Create a quote manually, eg. for things said in VOIP"""
     try:
         con = sqlite3.connect(db)
         cur = con.cursor()
@@ -131,8 +132,8 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
 
         status = discord.Embed(description=f'Quote saved successfully.')
 
-        logging.info("Quote saved successfully")
-        logging.debug(format_quote(content, authorName=author.name, timestamp=int(datetime.timestamp(timestamp))))
+        logger.info("Quote saved successfully")
+        logger.debug(format_quote(content, authorName=author.name, timestamp=int(datetime.timestamp(timestamp))))
 
         await interaction.response.send_message(
             format_quote(content, authorID=author.id, timestamp=int(datetime.timestamp(timestamp))),
@@ -146,7 +147,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         con.close()
     except sqlite3.Error as error:
         await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
-        logging.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
+        logger.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
     except dateutil.parser._parser.ParserError as error:
         await interaction.response.send_message(f'Error: {error}',ephemeral=True)
         
@@ -184,32 +185,32 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
                 if pkmsg is not None:
                     sql_values[1] = int(pkmsg.sender)
             except AttributeError as error:
-                logging.error("Fetching PluralKit author from message failed - message too old?")
+                logger.error("Fetching PluralKit author from message failed - message too old?")
                 try:
-                    logging.info("Trying to infer author from name substring...")
+                    logger.info("Trying to infer author from name substring...")
                     pkauthor = message.author.name
                     for k,v in cfg['sanford']['pluralkit_mapping'].items():
                         if v in pkauthor:
                             # Found our author!
-                            logging.info(f"Found 'em: Author is ID {k}")
+                            logger.info(f"Found 'em: Author is ID {k}")
                             sql_values[1] = int(k)
                             break
                     else:
                         raise KeyError("Could not find a user ID to map this message to.")
                 except KeyError as error:
-                    logging.error(f"Could not fetch webhook msg author for '{message.author.name}'")
+                    logger.error(f"Could not fetch webhook msg author for '{message.author.name}'")
                     await interaction.response.send_message(error,ephemeral=True)
                 except TypeError as error:
                     await interaction.response.send_message(error.with_traceback,ephemeral=True)
-                    logging.error("TypeError somewhere in the PK check code!", error.with_traceback)
+                    logger.error("TypeError somewhere in the PK check code!", error.with_traceback)
         
         cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
         con.commit()
 
         status = discord.Embed(description=f'[Quote]({message.jump_url}) saved successfully.')
 
-        logging.info("Quote saved successfully")
-        logging.debug(format_quote(message.content, authorName=message.author.name, timestamp=int(message.created_at.timestamp())),)
+        logger.info("Quote saved successfully")
+        logger.debug(format_quote(message.content, authorName=message.author.name, timestamp=int(message.created_at.timestamp())),)
 
         await interaction.response.send_message(
             format_quote(message.content, authorID=(sql_values[1] if message.webhook_id else message.author.id), timestamp=int(message.created_at.timestamp())),
@@ -224,13 +225,13 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 
     except sqlite3.Error as error:
         await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
-        logging.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
+        logger.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
     except LookupError as error:
         await interaction.response.send_message('Good News! This quote was already saved.',ephemeral=True)
-        logging.info("Quote was already saved previously")
+        logger.info("Quote was already saved previously")
 
 @sanford.event
 async def on_ready():
-    logging.info(f"Logged in. I am {sanford.user} (ID: {sanford.user.id})")
+    logger.info(f"Logged in. I am {sanford.user} (ID: {sanford.user.id})")
 
 sanford.run(cfg['sanford']['discord_token'], log_handler=handler, log_level=logging.INFO)
