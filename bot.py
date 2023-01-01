@@ -70,6 +70,31 @@ async def reboot(ctx):
     await ctx.send("Reloading the bot...")
     logger.warning("Rebooting the bot!")
     os.execv(sys.executable,['python3.11'] + sys.argv)
+    
+@sanford.command()
+@commands.is_owner()
+async def timestampquotes(ctx):
+    logger.error("This doesn't actually do anything yet.")
+    
+    """Hello, me. You had this thought to automate the process of assigning timestamps to quotes
+    at midnight on January 2, 2023. Instead of sleeping. You butt.
+    
+    Here's how you figured it might work:
+    
+    - SQL Query for all messages from the guild that have no msgID or timestamp.
+    - use https://discordpy.readthedocs.io/en/latest/api.html#discord.TextChannel.history
+        to fetch a complete history of the guild's main channel, and iterate through it to
+        find messages with the same author and:
+            - the EXACT message content
+            - The same content, but in a 'Bucket, addquote' cmd attributed to the author
+    - If we find the message (the older the better), save that msgID and timestamp to the DB
+    - Update the updatedAt field as well
+    - When the operation is done, return how many records were updated (updated/total)
+    
+    Because the operation is likely to take a bit, send a message when the operation starts,
+    and make Sanford 'type' while it's working, then follow-up when it's done
+    
+    Now go to sleep"""
 
 @sanford.tree.command()
 @app_commands.guilds(TGC)
