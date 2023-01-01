@@ -103,7 +103,7 @@ if __name__ == "__main__":
         content = re.sub("<(:\S+:)\d+>","\g<1>",content)
         
         # Console logging
-        print("'" + content + "' - " + aName + " (ID " + aID + ", timestamp " + str(timestamp) + ")")
+        print("'" + content + "' - " + rename_user(aID) + " (ID " + aID + ", timestamp " + str(timestamp) + ")")
 
         quote = format_quote(content,authorName=rename_user(aID),timestamp=timestamp)
             
