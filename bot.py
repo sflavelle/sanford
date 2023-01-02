@@ -107,7 +107,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
     
     # Alright, let's start by initialising a connection to the database
     
-    logger.info("Stampfinder: Attempting to resolve missing timestamps and message IDs for quotes")
+    logger.info("Stampfinder: Attempting to resolve missing timestamps and message IDs for quotes in #{channel.name}")
         
     con = sqlite3.connect(db) # autocommit=False for now, as I don't want to break the database in production with these changes
     cur = con.cursor() 
@@ -149,7 +149,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
             return userreact == sanford.application.owner and reaction.message.id == confirm.id
         react = None
         try: 
-            react,userreact = await sanford.wait_for("reaction_add",timeout=60,check=react_wait)
+            react = await sanford.wait_for("reaction_add",timeout=60,check=react_wait)
         except TimeoutError as error:
             logger.info("Stampfinder: Cancelled.")
             await confirm.edit(content="I didn't see a reaction from you, so we'll leave it for now.",delete_after=10)
@@ -165,20 +165,29 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
             msgcounter = 0 # Count total messages
             hitcounter = 0 # Count matching messages
             
-            async with ctx.typing():
-                # sqlwrite = con.cursor()
-                
-                logger.info(str(untimestamped[0])) # for debug purposes
-                
-                progressmsg = await ctx.send(f"**Progress:** **{msgcounter}** messages searched, **{hitcounter}/{len(untimestamped)}** found.")
+            logger.info(str(untimestamped[0])) # for debug purposes
             
+            progressmsg = await ctx.send(f"**Progress:** **{msgcounter}** messages searched, **{hitcounter}/{len(untimestamped)}** quote timestamps found.")
+            
+            async with ctx.typing():
+                          
                 async for message in channel.history(limit=None,oldest_first=True): # limit=None when this is complete
+                    if msgcounter == 0:
+                        logger.info(f"processing message {msgcounter} (currently exploring {message.created_at.strftime('%B %d, %Y')})")
                     msgcounter += 1
                     logger.debug(f"processing message {msgcounter} (currently exploring {message.created_at.strftime('%B %d, %Y')})")
                     if msgcounter % 1000 == 0:
                         logger.info(f"processing message {msgcounter} (currently exploring {message.created_at.strftime('%B %d, %Y')})")
-                        await progressmsg.edit(content = f"**Progress:** **{msgcounter}** messages searched, **{hitcounter}/{len(untimestamped)}** found.")
+                        await progressmsg.edit(content = f"**Progress:** **{msgcounter}** messages searched, **{hitcounter}/{len(untimestamped)}** quote timestamps found.")
                     for row in untimestamped:
+                        # First, check that between when we started and now,
+                        # we did not get a timestamp/message ID added
+
+                        check_dupe = cur.execute("SELECT 1 from quotes WHERE timestamp='" + str(datetime.timestamp(message.created_at)) + "'")
+                        if check_dupe.fetchall() is not None:
+                            logger.info("We already found a quote associated with this message")
+                            continue
+                        
                         if (row[1] == message.clean_content and int(row[2]) == message.author.id) or (row[1] in message.clean_content and int(row[2]) in message.raw_mentions):
                             if message.author.id == sanford.user.id:
                                 continue # Don't add confirmation messages from Sanford as the message ID itself
@@ -187,9 +196,11 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                                 # This basically means we tried to add it from IRC or another prior network
                                 # Ergo, this is not a timestamp we want
                                 
-                            logger.info(f"Found quote ID {row[0]} in msg ID {message.id} timestamp {message.created_at.strftime('%Y-%m-%d %H:%M:%S.%f %z')}")
-                            logger.info(f'quote content: {row[1]}\nquote author: {row[2]}')
-                            logger.info(f'message content: {message.content}\nmessage author: {message.author.id}')
+                            logger.info(f"Stampfinder: Found quote ID {row[0]} in msg ID {message.id} timestamp {message.created_at.strftime('%Y-%m-%d %H:%M:%S.%f %z')}")
+                            logger.debug(f'quote content: {row[1]}\nquote author: {row[2]}')
+                            logger.debug(f'message content: {message.content}\nmessage author: {message.author.id}')
+                            
+                            # OK, this is the part where we actually update the database
 
                             # For now, let's just move on
                             hitcounter += 1
@@ -197,7 +208,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                             continue
                     
                     # progressmsg.delete()
-            
+            logger.info(f"Done! Found sources for {str(hitcounter)} out of {str(len(untimestamped))} quotes in {str(msgcounter)} messages in #{channel.name}")
             await ctx.send(f"Done! Found sources for {str(hitcounter)} out of {str(len(untimestamped))} quotes in {str(msgcounter)} messages in <#{channel.id}>.\n\nOkay, I haven't actually *done* anything to them - I just supposedly found them. Look at the console before developing further.")
     con.close()
         
