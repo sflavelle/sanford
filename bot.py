@@ -2,7 +2,9 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from datetime import datetime
+import typing
+from datetime import datetime,timedelta,timezone
+import asyncio
 import yaml
 import sys
 import os
@@ -56,6 +58,13 @@ sanford = commands.Bot(command_prefix="&",intents=intents)
 # init Pluralkit API
 pluralkit = PK(cfg['sanford']['pluralkit_token'])
 
+# various helpers
+def strfdelta(tdelta, fmt):
+    d = {"days": tdelta.days}
+    d["hours"], rem = divmod(tdelta.seconds, 3600)
+    d["minutes"], d["seconds"] = divmod(rem, 60)
+    return fmt.format(**d)
+
 @sanford.command()
 @commands.is_owner()
 async def cmdsync(ctx):
@@ -74,9 +83,8 @@ async def reboot(ctx):
     
 @sanford.command()
 @commands.is_owner()
-async def stampfinder(ctx, *, channel: discord.TextChannel):
-    logger.exception("This doesn't actually do anything yet.")
-    
+async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord.Thread]):
+   
     # Hello, me. You had this thought to automate the process of assigning timestamps to quotes
     # at midnight on January 2, 2023. Instead of sleeping. You butt.
     
@@ -99,7 +107,7 @@ async def stampfinder(ctx, *, channel: discord.TextChannel):
     
     # Alright, let's start by initialising a connection to the database
     
-    logger.info("Attempting to resolve missing timestamps and message IDs for quotes")
+    logger.info("Stampfinder: Attempting to resolve missing timestamps and message IDs for quotes")
         
     con = sqlite3.connect(db) # autocommit=False for now, as I don't want to break the database in production with these changes
     cur = con.cursor() 
@@ -112,38 +120,83 @@ async def stampfinder(ctx, *, channel: discord.TextChannel):
     logger.info(f"Returned {str(len(untimestamped))} quotes in need of a timestamp or msgID")
     if len(untimestamped) == 0: 
         await ctx.send(f"Actually, these quotes need no action!")
-        logger.info("No action needed")
+        logger.info("Stampfinder: No action needed")
     else:
-        await ctx.send(f"Okay, I'm going to try to find message info for {str(len(untimestamped))} quotes using <#{channel.id}> - that's a reasonable assumption, right?\n\nThis is likely to take a while, so watch the console for updates...")
-        
-        msgcounter = 0 # Count total messages
-        hitcounter = 0 # Count matching messages
-        
+        # Calculate how long it might take to do
         async with ctx.typing():
-            # sqlwrite = con.cursor()
-         
-            async for message in channel.history(limit=None,oldest_first=True):
-                msgcounter += 1
-                logger.info(f"processing message {msgcounter}")
-                for row in untimestamped:
-                    if (row[1] == message.content and row[2] == message.author.id) or (row[1] in message.content and row[2] in message.raw_mentions):
-                        if message.author.id == sanford.user.id:
-                            continue # Don't add confirmation messages from Sanford as the message ID itself
-                        elif message.content.startswith('b!addquote'):
-                            continue # Pre-Bucket/Sanford string circa 2016
-                            # This basically means we tried to add it from IRC or another prior network
-                            # Ergo, this is not a timestamp we want
-                            
-                        logger.info(f"Found quote ID {row[0]} in msg ID {message.id} timestamp {message.created_at.strftime('%Y-%m-%d %H:%M:%S.%f %z')}")
-                        logger.info(f'quote content: {row[1]}\nquote author: {row[2]}')
-                        logger.info(f'message content: {message.content}\nmessage author: {message.author.id}')
+            msgtimes = []
+            async for message in channel.history(limit=300):
+                msgtimes.append(message.created_at)
+            
+            msgdeltas = [msgtimes[i-1]-msgtimes[i] for i in range(1, len(msgtimes))]
+            
+            avgmsgdelta = sum(msgdeltas, timedelta(0)) / len(msgdeltas)
+            logger.info(f"Stampfinder: average time between msgs: {avgmsgdelta.total_seconds()} seconds")
+            
+            channeldelta = datetime.now(timezone.utc) - channel.created_at
+            logger.info(f"Stampfinder: Channel {channel.name} has existed for {channeldelta.days} days")
+            
+            # channel.history can fetch 500 messages at a time every few seconds so... maybe??
 
-                        # For now, let's just move on
-                        hitcounter += 1
-                        logger.info(f"Found quote {hitcounter})")
-                        continue
+            estimatedelta = timedelta(channeldelta / avgmsgdelta) / (5*500*(1*60*24))
+            logger.info("Stampfinder: Estimate:")
+            logger.info(estimatedelta)
         
-        await ctx.send(f"Done! Found sources for {str(hitcounter)} out of {str(len(cur))} quotes in {str(msgcounter)} messages in <#{channel.id}>.\n\nOkay, I haven't actually *done* anything to them - I just supposedly found them. Look at the console before developing further.")
+        
+        confirm = await ctx.send(f"I can try to find as many quotes as I can, but this will probably take a very long time (rough estimate: **{strfdelta(estimatedelta, '{hours} hours, {minutes} minutes, {seconds} seconds')}** for a channel created **{channel.created_at.strftime('%B %Y')}**)...\nGo ahead and react with anything to confirm.")
+        
+        def react_wait(reaction,user):
+            return userreact == sanford.application.owner and reaction.message.id == confirm.id
+        react = None
+        try: 
+            react,userreact = await sanford.wait_for("reaction_add",timeout=60,check=react_wait)
+        except TimeoutError as error:
+            logger.info("Stampfinder: Cancelled.")
+            await confirm.edit(content="I didn't see a reaction from you, so we'll leave it for now.",delete_after=10)
+            await ctx.message.delete(delay=10)
+            await confirm.clear_reactions()
+        
+        if react is not None:
+        
+            await ctx.send(f"Okay, I'm going to try to find message info for {str(len(untimestamped))} quotes using <#{channel.id}>\n\nThis is likely to take a very, *very* long time, as I can only search 500 messages at a time, so watch the console for updates...")
+            
+            logger.info("Stampfinder: Here we go")
+            
+            msgcounter = 0 # Count total messages
+            hitcounter = 0 # Count matching messages
+            
+            async with ctx.typing():
+                # sqlwrite = con.cursor()
+                
+                progressmsg = await ctx.send(f"Progress: {msgcounter} messages searched, {hitcounter}/{len(untimestamped)} found.")
+            
+                async for message in channel.history(limit=None,oldest_first=True): # limit=None when this is complete
+                    msgcounter += 1
+                    logger.debug(f"processing message {msgcounter} (currently exploring {message.created_at.strftime('%B %d, %Y')})")
+                    if msgcounter % 1000 == 0:
+                        logger.info(f"processing message {msgcounter} (currently exploring {message.created_at.strftime('%B %d, %Y')})")
+                        progressmsg.edit(content = f"Progress: {msgcounter} messages searched, {hitcounter}/{len(untimestamped)} found.")
+                    for row in untimestamped:
+                        if (row[1] == message.clean_content and row[2] == message.author.id) or (row[1] in message.clean_content and row[2] in message.raw_mentions):
+                            if message.author.id == sanford.user.id:
+                                continue # Don't add confirmation messages from Sanford as the message ID itself
+                            elif message.content.startswith('b!addquote'):
+                                continue # Pre-Bucket/Sanford string circa 2016
+                                # This basically means we tried to add it from IRC or another prior network
+                                # Ergo, this is not a timestamp we want
+                                
+                            logger.info(f"Found quote ID {row[0]} in msg ID {message.id} timestamp {message.created_at.strftime('%Y-%m-%d %H:%M:%S.%f %z')}")
+                            logger.info(f'quote content: {row[1]}\nquote author: {row[2]}')
+                            logger.info(f'message content: {message.content}\nmessage author: {message.author.id}')
+
+                            # For now, let's just move on
+                            hitcounter += 1
+                            logger.info(f"Found quote {hitcounter})")
+                            continue
+                    
+                    # progressmsg.delete()
+            
+            await ctx.send(f"Done! Found sources for {str(hitcounter)} out of {str(len(untimestamped))} quotes in {str(msgcounter)} messages in <#{channel.id}>.\n\nOkay, I haven't actually *done* anything to them - I just supposedly found them. Look at the console before developing further.")
     con.close()
         
 @stampfinder.error
