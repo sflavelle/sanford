@@ -20,6 +20,7 @@ from mastoposter import post_new_quote
 # setup logging
 logger = logging.getLogger('discord')
 logger.setLevel(logging.INFO)
+logging.getLogger('discord').setLevel(logging.DEBUG)
 
 handler = logging.handlers.RotatingFileHandler(
     filename='logs/sanford.log',
@@ -73,41 +74,47 @@ async def reboot(ctx):
     
 @sanford.command()
 @commands.is_owner()
-async def stampfinder(ctx, channel: discord.TextChannel):
-    logger.error("This doesn't actually do anything yet.")
+async def stampfinder(ctx, *, channel: discord.TextChannel):
+    logger.exception("This doesn't actually do anything yet.")
     
-    """Hello, me. You had this thought to automate the process of assigning timestamps to quotes
-    at midnight on January 2, 2023. Instead of sleeping. You butt.
+    # Hello, me. You had this thought to automate the process of assigning timestamps to quotes
+    # at midnight on January 2, 2023. Instead of sleeping. You butt.
     
-    Here's how you figured it might work:
+    # Here's how you figured it might work:
     
-    - SQL Query for all messages from the guild that have no msgID or timestamp.
-    - use https://discordpy.readthedocs.io/en/latest/api.html#discord.TextChannel.history
-        to fetch a complete history of the guild's main channel, and iterate through it to
-        find messages with the same author and:
-            - the EXACT message content
-            - The same content, but in a 'Bucket, addquote' cmd attributed to the author
-    - If we find the message (the older the better), save that msgID and timestamp to the DB
-    - Update the updatedAt field as well
-    - When the operation is done, return how many records were updated (updated/total)
+    # - SQL Query for all messages from the guild that have no msgID or timestamp.
+    # - use https://discordpy.readthedocs.io/en/latest/api.html#discord.TextChannel.history
+    #     to fetch a complete history of the guild's main channel, and iterate through it to
+    #     find messages with the same author and:
+    #         - the EXACT message content
+    #         - The same content, but in a 'Bucket, addquote' cmd attributed to the author
+    # - If we find the message (the older the better), save that msgID and timestamp to the DB
+    # - Update the updatedAt field as well
+    # - When the operation is done, return how many records were updated (updated/total)
     
-    Because the operation is likely to take a bit, send a message when the operation starts,
-    and make Sanford 'type' while it's working, then follow-up when it's done
+    # Because the operation is likely to take a bit, send a message when the operation starts,
+    # and make Sanford 'type' while it's working, then follow-up when it's done
     
-    Now go to sleep"""
-    
-    logger.info("Attempting to resolve missing timestamps and message IDs for quotes")
+    # Now go to sleep
     
     # Alright, let's start by initialising a connection to the database
+    
+    logger.info("Attempting to resolve missing timestamps and message IDs for quotes")
         
-    con = sqlite3.connect(db, autocommit=False) # autocommit=False for now, as I don't want to break the database in production with these changes
+    con = sqlite3.connect(db) # autocommit=False for now, as I don't want to break the database in production with these changes
     cur = con.cursor() 
     
     cur.execute(f"SELECT id,content,authorID FROM quotes WHERE guild='{str(ctx.guild.id)}' AND authorID != '' AND (timestamp IS NULL OR msgID IS NULL) ORDER BY id ASC")
-    logger.info(f"Returned {str(len(cur))} quotes in need of a timestamp or msgID")
-    if str(len(cur)) == 0: await ctx.send(f"Actually, these quotes need no action!"); logger.info("No action needed")
+    
+    # Sadly, SELECT statements don't have a rowcount or len in the cur, so we /have/ to fetchall
+    untimestamped = cur.fetchall()
+    
+    logger.info(f"Returned {str(len(untimestamped))} quotes in need of a timestamp or msgID")
+    if len(untimestamped) == 0: 
+        await ctx.send(f"Actually, these quotes need no action!")
+        logger.info("No action needed")
     else:
-        await ctx.send(f"Okay, I'm going to try to find message info for {str(len(cur))} quotes using <#{channel.id}> - that's a reasonable assumption, right?\n\nThis is likely to take a while, so watch the console for updates...")
+        await ctx.send(f"Okay, I'm going to try to find message info for {str(len(untimestamped))} quotes using <#{channel.id}> - that's a reasonable assumption, right?\n\nThis is likely to take a while, so watch the console for updates...")
         
         msgcounter = 0 # Count total messages
         hitcounter = 0 # Count matching messages
@@ -117,23 +124,27 @@ async def stampfinder(ctx, channel: discord.TextChannel):
          
             async for message in channel.history(limit=None,oldest_first=True):
                 msgcounter += 1
-                
-                for untimestamped in cur:
-                    if (untimestamped[1] == message.content and untimestamped[2] == message.author.id) or (untimestamped[1] in message.content and untimestamped[2] in message.raw_mentions):
+                logger.info(f"processing message {msgcounter}")
+                for row in untimestamped:
+                    if (row[1] == message.content and row[2] == message.author.id) or (row[1] in message.content and row[2] in message.raw_mentions):
                         if message.author.id == sanford.user.id:
                             continue # Don't add confirmation messages from Sanford as the message ID itself
                         elif message.content.startswith('b!addquote'):
                             continue # Pre-Bucket/Sanford string circa 2016
                             # This basically means we tried to add it from IRC or another prior network
+                            # Ergo, this is not a timestamp we want
                             
-                        logger.debug(f"Found quote ID {untimestamped[0]} in msg ID {message.id} timestamp {message.created_at.strftime('%Y-%m-%d %H:%M:%S.%f %z')}")
-                        logger.debug(f'quote content: {untimestamped[1]}\nquote author: {untimestamped[2]}')
-                        logger.debug(f'message content: {message.content}\nmessage author: {message.author.id}')
+                        logger.info(f"Found quote ID {row[0]} in msg ID {message.id} timestamp {message.created_at.strftime('%Y-%m-%d %H:%M:%S.%f %z')}")
+                        logger.info(f'quote content: {row[1]}\nquote author: {row[2]}')
+                        logger.info(f'message content: {message.content}\nmessage author: {message.author.id}')
 
                         # For now, let's just move on
                         hitcounter += 1
+                        logger.info(f"Found quote {hitcounter})")
                         continue
+        
         await ctx.send(f"Done! Found sources for {str(hitcounter)} out of {str(len(cur))} quotes in {str(msgcounter)} messages in <#{channel.id}>.\n\nOkay, I haven't actually *done* anything to them - I just supposedly found them. Look at the console before developing further.")
+    con.close()
         
 @stampfinder.error
 async def stampfinder_err(ctx, error):
@@ -141,6 +152,9 @@ async def stampfinder_err(ctx, error):
         await ctx.send("Can't find that channel mate.")
     elif isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("You need to provide a channel for me to search through.")
+    else:
+        await ctx.send(error)
+        logger.error(error)
 
 @sanford.tree.command()
 @app_commands.guilds(TGC)
@@ -305,4 +319,4 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 async def on_ready():
     logger.info(f"Logged in. I am {sanford.user} (ID: {sanford.user.id})")
 
-sanford.run(cfg['sanford']['discord_token'], log_handler=handler, log_level=logging.INFO)
+sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
