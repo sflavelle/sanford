@@ -107,7 +107,8 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
     
     # Alright, let's start by initialising a connection to the database
     
-    logger.info("Stampfinder: Attempting to resolve missing timestamps and message IDs for quotes in #{channel.name}")
+    logger.info(f"Stampfinder: Attempting to resolve missing timestamps and message IDs for quotes in #{channel.name}")
+    delta = datetime.now()
         
     con = sqlite3.connect(db) # autocommit=False for now, as I don't want to break the database in production with these changes
     cur = con.cursor() 
@@ -138,7 +139,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
             
             # channel.history can fetch 500 messages at a time every few seconds so... maybe??
 
-            estimatedelta = timedelta(channeldelta / avgmsgdelta) / (5*500*(1*60*24))
+            estimatedelta = timedelta(channeldelta / avgmsgdelta) / (5*500*(1*60*60*24)) * (len(untimestamped)/10)
             logger.info("Stampfinder: Estimate:")
             logger.info(estimatedelta)
         
@@ -164,9 +165,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
             
             msgcounter = 0 # Count total messages
             hitcounter = 0 # Count matching messages
-            
-            logger.info(str(untimestamped[0])) # for debug purposes
-            
+                        
             progressmsg = await ctx.send(f"**Progress:** **{msgcounter}** messages searched, **{hitcounter}/{len(untimestamped)}** quote timestamps found.")
             
             async with ctx.typing():
@@ -183,9 +182,12 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                         # First, check that between when we started and now,
                         # we did not get a timestamp/message ID added
 
-                        check_dupe = cur.execute("SELECT 1 from quotes WHERE timestamp='" + str(datetime.timestamp(message.created_at)) + "'")
-                        if check_dupe.fetchall() is not None:
-                            logger.info("We already found a quote associated with this message")
+                        # This of course
+                        cur.execute(f"SELECT 1 from quotes WHERE id='{row[0]}' AND (timestamp IS NULL OR msgID IS NULL)")
+                        check_dupe = cur.fetchall()
+                        
+                        if not(bool(check_dupe)):
+                            logger.debug("We already found a quote associated with this message")
                             continue
                         
                         if (row[1] == message.clean_content and int(row[2]) == message.author.id) or (row[1] in message.clean_content and int(row[2]) in message.raw_mentions):
@@ -201,15 +203,29 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                             logger.debug(f'message content: {message.content}\nmessage author: {message.author.id}')
                             
                             # OK, this is the part where we actually update the database
+                            try: 
+                                cur.execute("UPDATE quotes SET msgID=?, timestamp=?, updatedAt=? WHERE ID=?", (
+                                    message.id, 
+                                    int(datetime.timestamp(message.created_at)),
+                                    datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
+                                    int(row[0])
+                                    ))
+                                
+                                con.commit()
+                            except sqlite3.Error as error:
+                                await ctx.send(f'Error: SQL Update Failed due to:\n```{str(error)}```')
+                                logger.error("QUOTE SQL ERROR:\n" + str(error))
+                                break
 
-                            # For now, let's just move on
                             hitcounter += 1
-                            logger.info(f"Found quote {hitcounter}")
+                            
                             continue
                     
                     # progressmsg.delete()
+
+            delta = datetime.now() - delta
             logger.info(f"Done! Found sources for {str(hitcounter)} out of {str(len(untimestamped))} quotes in {str(msgcounter)} messages in #{channel.name}")
-            await ctx.send(f"Done! Found sources for {str(hitcounter)} out of {str(len(untimestamped))} quotes in {str(msgcounter)} messages in <#{channel.id}>.\n\nOkay, I haven't actually *done* anything to them - I just supposedly found them. Look at the console before developing further.")
+            await ctx.send(f"Done! Found sources for **{str(hitcounter)}** out of {str(len(untimestamped))} quotes in **{str(msgcounter)} messages** in <#{channel.id}>.\nTime taken: **{strfdelta(delta, '{hours} hours, {minutes} minutes, {seconds} seconds')}**.")
     con.close()
         
 @stampfinder.error
