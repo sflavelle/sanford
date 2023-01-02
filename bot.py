@@ -145,7 +145,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
         
         confirm = await ctx.send(f"I can try to find as many quotes as I can, but this will probably take a very long time (rough estimate: **{strfdelta(estimatedelta, '{hours} hours, {minutes} minutes, {seconds} seconds')}** for a channel created **{channel.created_at.strftime('%B %Y')}**)...\nGo ahead and react with anything to confirm.")
         
-        def react_wait(reaction,user):
+        def react_wait(reaction,userreact):
             return userreact == sanford.application.owner and reaction.message.id == confirm.id
         react = None
         try: 
@@ -168,16 +168,18 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
             async with ctx.typing():
                 # sqlwrite = con.cursor()
                 
-                progressmsg = await ctx.send(f"Progress: {msgcounter} messages searched, {hitcounter}/{len(untimestamped)} found.")
+                logger.info(str(untimestamped[0])) # for debug purposes
+                
+                progressmsg = await ctx.send(f"**Progress:** **{msgcounter}** messages searched, **{hitcounter}/{len(untimestamped)}** found.")
             
                 async for message in channel.history(limit=None,oldest_first=True): # limit=None when this is complete
                     msgcounter += 1
                     logger.debug(f"processing message {msgcounter} (currently exploring {message.created_at.strftime('%B %d, %Y')})")
                     if msgcounter % 1000 == 0:
                         logger.info(f"processing message {msgcounter} (currently exploring {message.created_at.strftime('%B %d, %Y')})")
-                        progressmsg.edit(content = f"Progress: {msgcounter} messages searched, {hitcounter}/{len(untimestamped)} found.")
+                        await progressmsg.edit(content = f"**Progress:** **{msgcounter}** messages searched, **{hitcounter}/{len(untimestamped)}** found.")
                     for row in untimestamped:
-                        if (row[1] == message.clean_content and row[2] == message.author.id) or (row[1] in message.clean_content and row[2] in message.raw_mentions):
+                        if (row[1] == message.clean_content and int(row[2]) == message.author.id) or (row[1] in message.clean_content and int(row[2]) in message.raw_mentions):
                             if message.author.id == sanford.user.id:
                                 continue # Don't add confirmation messages from Sanford as the message ID itself
                             elif message.content.startswith('b!addquote'):
@@ -191,7 +193,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
 
                             # For now, let's just move on
                             hitcounter += 1
-                            logger.info(f"Found quote {hitcounter})")
+                            logger.info(f"Found quote {hitcounter}")
                             continue
                     
                     # progressmsg.delete()
