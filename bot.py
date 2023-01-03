@@ -272,13 +272,15 @@ async def quote_get(interaction: discord.Interaction):
     )
         
     # Send the resulting quote
-    qmsg = await interaction.response.send_message(quote,allowed_mentions=discord.AllowedMentions.none(),embed=karmaview)
+    await interaction.response.send_message(quote,allowed_mentions=discord.AllowedMentions.none(),embed=karmaview)
     
     # Let's allow the quote to be voted on
     thumbsUp, thumbsDown = "👍", "👎"
     
-    qmsg.add_reaction(thumbsUp)
-    qmsg.add_reaction(thumbsDown)
+    qmsg = await interaction.original_response()
+    
+    await qmsg.add_reaction(thumbsUp)
+    await qmsg.add_reaction(thumbsDown)
     
     await asyncio.sleep(180) # Wait 3 minutes before collecting reactions
     
@@ -299,12 +301,16 @@ async def quote_get(interaction: discord.Interaction):
     newkarma = karma + karmadiff
     
     karmaview = discord.Embed(
-        description=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts' if karmadiff > 0 else 'went down by {karmadiff} pts' if karmadiff < 0 else 'did not change'}). Voting is over."
+        description=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'}). Voting is over."
     )
     
     update_karma(db,qid,newkarma)
     await qmsg.edit(embed=karmaview)
     await qmsg.clear_reactions()
+    
+    await asyncio.sleep(60*5)
+    
+    await qmsg.edit(embed=None) # Delete the embed - no longer needed
 
 @quote_group.command(name="add")
 @app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened')
