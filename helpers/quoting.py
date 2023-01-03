@@ -34,7 +34,14 @@ def fetch_random_quote(db: str,gid,exclude_list: list=list(())):
         exclude = f"AND authorID NOT IN ({str(exclude_list).strip('[]')})"
 
     # Fetch a random quote from the SQL database
-    quote = cur.execute(f"SELECT content,authorID,authorName,timestamp FROM quotes WHERE guild='{str(gid)}' AND authorID != '' {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
-    content,aID,aName,timestamp = quote.fetchone()
+    quote = cur.execute(f"SELECT id,content,authorID,authorName,timestamp,karma FROM quotes WHERE guild='{str(gid)}' AND authorID != '' {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
+    id,content,aID,aName,timestamp,karma = quote.fetchone()
     con.close()
-    return (content, aID, aName, timestamp)
+    return (id, content, aID, aName, timestamp, karma)
+
+def update_karma(db: str,qid,karma):
+    con = sqlite3.connect(db)
+    cur = con.cursor()
+    cur.execute("UPDATE quotes SET karma=? WHERE ID=?", (karma, qid))
+    con.commit()
+    con.close()

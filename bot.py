@@ -16,7 +16,7 @@ import sqlite3
 from dateutil.parser import *
 import dateutil
 # Import custom libraries
-from helpers.quoting import format_quote,fetch_random_quote
+from helpers.quoting import format_quote,fetch_random_quote,update_karma
 from mastoposter import post_new_quote
 
 # setup logging
@@ -190,7 +190,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                             logger.debug("We already found a quote associated with this message")
                             continue
                         
-                        if (row[1] == message.content and int(row[2]) == message.author.id) or (row[1] in message.clean_content and int(row[2]) in message.raw_mentions):
+                        if (row[1] == message.content and int(row[2]) == message.author.id) or (row[1] in message.content and int(row[2]) == message.author.id) or (row[1] in message.clean_content and int(row[2]) in message.raw_mentions):
                             if message.author.id == sanford.user.id:
                                 continue # Don't add confirmation messages from Sanford as the message ID itself
                             elif message.content.startswith('b!addquote'):
@@ -210,8 +210,6 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                                     datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
                                     int(row[0])
                                     ))
-                                
-                                con.commit()
                             except sqlite3.Error as error:
                                 await ctx.send(f'Error: SQL Update Failed due to:\n```{str(error)}```')
                                 logger.error("QUOTE SQL ERROR:\n" + str(error))
@@ -222,7 +220,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                             continue
                     
                     # progressmsg.delete()
-
+            con.commit()
             delta = datetime.now() - delta
             logger.info(f"Done! Found sources for {str(hitcounter)} out of {str(len(untimestamped))} quotes in {str(msgcounter)} messages in #{channel.name}")
             await ctx.send(f"Done! Found sources for **{str(hitcounter)}** out of {str(len(untimestamped))} quotes in **{str(msgcounter)} messages** in <#{channel.id}>.\nTime taken: **{strfdelta(delta, '{hours} hours, {minutes} minutes, {seconds} seconds')}**.")
@@ -265,11 +263,48 @@ quote_group = app_commands.Group(name='quote',description='Save or recall memora
 @quote_group.command(name="get")
 async def quote_get(interaction: discord.Interaction):
     """Get a random quote!"""
-    content,aID,aName,timestamp = fetch_random_quote("db/quotes.sqlite",interaction.guild_id)
+    qid,content,aID,aName,timestamp,karma = fetch_random_quote("db/quotes.sqlite",interaction.guild_id)
 
     quote = format_quote(content,authorID=aID,timestamp=timestamp)
-    # Finally, send the resulting quote
-    await interaction.response.send_message(quote,allowed_mentions=discord.AllowedMentions.none())
+    
+    karmaview = discord.Embed(
+        description=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for 3 minutes from <t:{int(datetime.timestamp(datetime.now()))}:t>."
+    )
+        
+    # Send the resulting quote
+    qmsg = await interaction.response.send_message(quote,allowed_mentions=discord.AllowedMentions.none(),embed=karmaview)
+    
+    # Let's allow the quote to be voted on
+    thumbsUp, thumbsDown = "👍", "👎"
+    
+    qmsg.add_reaction(thumbsUp)
+    qmsg.add_reaction(thumbsDown)
+    
+    await asyncio.sleep(180) # Wait 3 minutes before collecting reactions
+    
+    qmsg = await interaction.channel.fetch_message(qmsg.id)
+    
+    upCount = 0
+    downCount = 0
+    
+    # Count the reactions (Sanfords doesn't count)
+    for e in qmsg.reactions:
+        match e.emoji:
+            case "👍":
+                upCount = e.count - 1
+            case "👎":
+                downCount = e.count - 1
+                
+    karmadiff = 0 + upCount - downCount
+    newkarma = karma + karmadiff
+    
+    karmaview = discord.Embed(
+        description=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts' if karmadiff > 0 else 'went down by {karmadiff} pts' if karmadiff < 0 else 'did not change'}). Voting is over."
+    )
+    
+    update_karma(db,qid,newkarma)
+    await qmsg.edit(embed=karmaview)
+    await qmsg.clear_reactions()
 
 @quote_group.command(name="add")
 @app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened')
