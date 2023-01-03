@@ -113,7 +113,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
     con = sqlite3.connect(db) # autocommit=False for now, as I don't want to break the database in production with these changes
     cur = con.cursor() 
     
-    cur.execute(f"SELECT id,content,authorID FROM quotes WHERE guild='{str(ctx.guild.id)}' AND authorID != '' AND (timestamp IS NULL OR msgID IS NULL) ORDER BY id ASC")
+    cur.execute(f"SELECT id,content,authorID FROM quotes WHERE guild='{str(ctx.guild.id)}' AND authorID != '' AND timestamp IS NULL ORDER BY id ASC")
     
     # Sadly, SELECT statements don't have a rowcount or len in the cur, so we /have/ to fetchall
     untimestamped = cur.fetchall()
@@ -139,7 +139,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
             
             # channel.history can fetch 500 messages at a time every few seconds so... maybe??
 
-            estimatedelta = timedelta(channeldelta / avgmsgdelta) / (5*500*(1*60*60*24)) * (len(untimestamped)/10)
+            estimatedelta = timedelta(channeldelta / avgmsgdelta) / (5*500*(1*60*60*24)) * (len(untimestamped)/5)
             logger.info("Stampfinder: Estimate:")
             logger.info(estimatedelta)
         
@@ -159,7 +159,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
         
         if react is not None:
         
-            await ctx.send(f"Okay, I'm going to try to find message info for {str(len(untimestamped))} quotes using <#{channel.id}>\n\nThis is likely to take a very, *very* long time, as I can only search 500 messages at a time, so watch the console for updates...")
+            await ctx.send(f"Okay, I'm going to try to find message info for {str(len(untimestamped))} quotes using <#{channel.id}>\n\nThis is likely to take a very, *very* long time, as I can only search 500 messages at a time.")
             
             logger.info("Stampfinder: Here we go")
             
@@ -190,7 +190,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                             logger.debug("We already found a quote associated with this message")
                             continue
                         
-                        if (row[1] == message.clean_content and int(row[2]) == message.author.id) or (row[1] in message.clean_content and int(row[2]) in message.raw_mentions):
+                        if (row[1] == message.content and int(row[2]) == message.author.id) or (row[1] in message.clean_content and int(row[2]) in message.raw_mentions):
                             if message.author.id == sanford.user.id:
                                 continue # Don't add confirmation messages from Sanford as the message ID itself
                             elif message.content.startswith('b!addquote'):
