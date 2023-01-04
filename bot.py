@@ -1,6 +1,6 @@
 # Import essential libraries
 import discord
-from discord import app_commands
+from discord import app_commands,Colour
 from discord.ext import commands
 import typing
 from datetime import datetime,timedelta,timezone
@@ -16,7 +16,7 @@ import sqlite3
 from dateutil.parser import *
 import dateutil
 # Import custom libraries
-from helpers.quoting import format_quote,fetch_random_quote,update_karma
+from helpers.quoting import *
 from mastoposter import post_new_quote
 
 # setup logging
@@ -261,18 +261,24 @@ async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: boo
 quote_group = app_commands.Group(name='quote',description='Save or recall memorable messages')
 
 @quote_group.command(name="get")
-async def quote_get(interaction: discord.Interaction):
+async def quote_get(interaction: discord.Interaction, user: discord.Member=None):
     """Get a random quote!"""
-    qid,content,aID,aName,timestamp,karma = fetch_random_quote("db/quotes.sqlite",interaction.guild_id)
+    if bool(user):
+        qid,content,aID,aName,timestamp,karma = user_random_quote("db/quotes.sqlite",interaction.guild_id, user.id)
+    else:
+        qid,content,aID,aName,timestamp,karma = fetch_random_quote("db/quotes.sqlite",interaction.guild_id)
 
-    quote = format_quote(content,authorID=aID,timestamp=timestamp)
+    qvote_timeout = cfg['sanford']['quoting']['vote_timeout']
     
-    karmaview = discord.Embed(
-        description=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for 3 minutes from <t:{int(datetime.timestamp(datetime.now()))}:t>."
+    quoteview = discord.Embed(
+        description=format_quote(content, timestamp, aID, format='markdown')
     )
-        
+    authorObject = await interaction.guild.fetch_member(aID)
+    authorAvatar = authorObject.display_avatar
+    quoteview.set_thumbnail(url=authorAvatar.url)
+    quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
     # Send the resulting quote
-    await interaction.response.send_message(quote,allowed_mentions=discord.AllowedMentions.none(),embed=karmaview)
+    await interaction.response.send_message(allowed_mentions=discord.AllowedMentions.none(),embed=quoteview)
     
     # Let's allow the quote to be voted on
     thumbsUp, thumbsDown = "👍", "👎"
@@ -282,7 +288,8 @@ async def quote_get(interaction: discord.Interaction):
     await qmsg.add_reaction(thumbsUp)
     await qmsg.add_reaction(thumbsDown)
     
-    await asyncio.sleep(180) # Wait 3 minutes before collecting reactions
+    
+    await asyncio.sleep(60*qvote_timeout) # Wait 3 minutes before collecting reactions
     
     qmsg = await interaction.channel.fetch_message(qmsg.id)
     
@@ -300,17 +307,11 @@ async def quote_get(interaction: discord.Interaction):
     karmadiff = 0 + upCount - downCount
     newkarma = karma + karmadiff
     
-    karmaview = discord.Embed(
-        description=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'}). Voting is over."
-    )
+    quoteview.set_footer(text=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'} this time). Voting has ended.")
     
     update_karma(db,qid,newkarma)
-    await qmsg.edit(embed=karmaview)
+    await qmsg.edit(embed=quoteview)
     await qmsg.clear_reactions()
-    
-    await asyncio.sleep(60*5)
-    
-    await qmsg.edit(embed=None) # Delete the embed - no longer needed
 
 @quote_group.command(name="add")
 @app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened')
@@ -338,14 +339,16 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
         con.commit()
 
-        status = discord.Embed(description=f'Quote saved successfully.')
-
         logger.info("Quote saved successfully")
         logger.debug(format_quote(content, authorName=author.name, timestamp=int(datetime.timestamp(timestamp))))
+        
+        quote = format_quote(content, authorName=author.name, timestamp=int(datetime.timestamp(timestamp)), format='discord_embed')
+        quote.add_field(name='Status',value=f'Quote saved successfully.')
+        authorAvatar = author.display_avatar
+        quote.set_thumbnail(url=authorAvatar.url)
 
         await interaction.response.send_message(
-            format_quote(content, authorID=author.id, timestamp=int(datetime.timestamp(timestamp))),
-            embed=status,
+            embed=quote,
             allowed_mentions=discord.AllowedMentions.none()
             )
         
@@ -415,14 +418,17 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
         con.commit()
 
-        status = discord.Embed(description=f'[Quote]({message.jump_url}) saved successfully.')
+        quote = format_quote(message.content, authorID=message.author.id, timestamp=int(message.created_at.timestamp()), format='discord_embed')
+        quote.add_field(name='Status',value=f'[Quote]({message.jump_url}) saved successfully.')
+        
+        authorAvatar = message.author.display_avatar
+        quote.set_thumbnail(url=authorAvatar.url)
 
         logger.info("Quote saved successfully")
         logger.debug(format_quote(message.content, authorName=message.author.name, timestamp=int(message.created_at.timestamp())),)
 
         await interaction.response.send_message(
-            format_quote(message.content, authorID=(sql_values[1] if message.webhook_id else message.author.id), timestamp=int(message.created_at.timestamp())),
-            embed=status,
+            embed=quote,
             allowed_mentions=discord.AllowedMentions.none()
             )
         
