@@ -270,12 +270,22 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
 
     qvote_timeout = cfg['sanford']['quoting']['vote_timeout']
     
+    # Is the user still in the server?
+    authorObject = None
+    try: 
+        authorObject = await interaction.guild.fetch_member(aID)
+    except:
+        pass
+        
+    
     quoteview = discord.Embed(
-        description=format_quote(content, timestamp, aID, format='markdown')
+        description=format_quote(content, timestamp, authorID=aID if bool(authorObject) else None, authorName=aName, format='markdown')
     )
-    authorObject = await interaction.guild.fetch_member(aID)
-    authorAvatar = authorObject.display_avatar
-    quoteview.set_thumbnail(url=authorAvatar.url)
+    if bool(authorObject):
+        authorAvatar = authorObject.display_avatar
+        quoteview.set_thumbnail(url=authorAvatar.url)
+    else:
+        quoteview.set_thumbnail(url="https://cdn.thegeneral.chat/sanford/special-avatars/nothing.jpg")
     quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
     # Send the resulting quote
     await interaction.response.send_message(allowed_mentions=discord.AllowedMentions.none(),embed=quoteview)
