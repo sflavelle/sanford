@@ -289,7 +289,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
         authorAvatar = authorObject.display_avatar
         quoteview.set_thumbnail(url=authorAvatar.url)
     else:
-        quoteview.set_thumbnail(url="https://cdn.thegeneral.chat/sanford/special-avatars/nothing.jpg")
+        quoteview.set_thumbnail(url="https://cdn.thegeneral.chat/sanford/special-avatars/sanford-quote-noicon.png")
     quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
     # Send the resulting quote
     await interaction.response.send_message(allowed_mentions=discord.AllowedMentions.none(),embed=quoteview)
