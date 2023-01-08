@@ -263,10 +263,14 @@ quote_group = app_commands.Group(name='quote',description='Save or recall memora
 @quote_group.command(name="get")
 async def quote_get(interaction: discord.Interaction, user: discord.Member=None):
     """Get a random quote!"""
-    if bool(user):
-        qid,content,aID,aName,timestamp,karma = user_random_quote("db/quotes.sqlite",interaction.guild_id, user.id)
-    else:
-        qid,content,aID,aName,timestamp,karma = fetch_random_quote("db/quotes.sqlite",interaction.guild_id)
+    try:
+        if bool(user):
+            qid,content,aID,aName,timestamp,karma = user_random_quote("db/quotes.sqlite",interaction.guild_id, user.id)
+        else:
+            qid,content,aID,aName,timestamp,karma = fetch_random_quote("db/quotes.sqlite",interaction.guild_id)
+    except LookupError as error:
+        await interaction.response.send_message(str(error), ephemeral=True)
+        return
 
     qvote_timeout = cfg['sanford']['quoting']['vote_timeout']
     
@@ -317,7 +321,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
     karmadiff = 0 + upCount - downCount
     newkarma = karma + karmadiff
     
-    quoteview.set_footer(text=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'} this time). Voting has ended.")
+    quoteview.set_footer(text=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'} this time).")
     
     update_karma(db,qid,newkarma)
     await qmsg.edit(embed=quoteview)

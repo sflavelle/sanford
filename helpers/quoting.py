@@ -71,8 +71,13 @@ def user_random_quote(db: str,gid,uid,exclude_list: list=list(())):
         exclude = f"AND authorID NOT IN ({str(exclude_list).strip('[]')})"
 
     # Fetch a random quote from the SQL database
-    quote = cur.execute(f"SELECT id,content,authorID,authorName,timestamp,karma FROM quotes WHERE guild='{str(gid)}' AND authorID = '{str(uid)}' {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
-    id,content,aID,aName,timestamp,karma = quote.fetchone()
+    try:
+        quote = cur.execute(f"SELECT id,content,authorID,authorName,timestamp,karma FROM quotes WHERE guild='{str(gid)}' AND authorID = '{str(uid)}' {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
+        id,content,aID,aName,timestamp,karma = quote.fetchone()
+    except TypeError as error:
+        if bool(uid) and "NoneType object" in str(error):
+            raise LookupError("Sorry, that user doesn't have any quotes saved in this server yet!")
+
     con.close()
     return (id, content, aID, aName, timestamp, karma)
 
