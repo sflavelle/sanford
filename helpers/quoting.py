@@ -1,6 +1,11 @@
 from datetime import datetime
 import sqlite3
 import discord
+import yaml
+import re
+
+with open('config.yaml', 'r') as file:
+    cfg = yaml.safe_load(file)
 
 def format_quote(content,timestamp,authorID=None,authorName=None,bot=None,format: str='plain'):
     quote_string_id = '''"{0}"
@@ -58,8 +63,12 @@ def fetch_random_quote(db: str,gid,exclude_list: list=list(())):
         exclude = f"AND authorID NOT IN ({str(exclude_list).strip('[]')})"
 
     # Fetch a random quote from the SQL database
-    quote = cur.execute(f"SELECT id,content,authorID,authorName,timestamp,karma FROM quotes WHERE guild='{str(gid)}' AND authorID != '' {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
-    id,content,aID,aName,timestamp,karma = quote.fetchone()
+    try:
+        quote = cur.execute(f"SELECT id,content,authorID,authorName,timestamp,karma FROM quotes WHERE guild='{str(gid)}' AND authorID != '' {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
+        id,content,aID,aName,timestamp,karma = quote.fetchone()
+    except TypeError as error:
+        if "NoneType object" in str(error):
+            raise LookupError("Sorry, there aren't any quotes saved in this server yet.\n\nTo save a quote, right-click a message and navigate to `Apps > Save as quote!`. If you want to save a message manually (eg. something said in voice, IRL or in a game), the `/quote add` command will help you save those quotes.")
     con.close()
     return (id, content, aID, aName, timestamp, karma)
 
@@ -87,3 +96,26 @@ def update_karma(db: str,qid,karma):
     cur.execute("UPDATE quotes SET karma=? WHERE ID=?", (karma, qid))
     con.commit()
     con.close()
+    
+def rename_user(id, fallback: str):
+    for k,v in cfg['mappings']['users'].items():
+        if k in id:
+            # Found our author!
+            return v
+    else:
+        return fallback
+    
+def strip_discord_format(str):
+    emoji = re.compile(r"<(:\S+:)\d+>")
+    user = re.compile(r"<@!?(\d+)>")
+    # replace emoji mentions with just the :emoji: string
+    str = re.sub(emoji,"\g<1>",str)
+    
+    usermatches = user.finditer(str)
+    
+    for match in usermatches:
+        str = str.replace(f"<@{match[0]}>", rename_user(match[0], '(no id match)'))
+        
+    return str
+            
+    
