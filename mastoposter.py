@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
 
     def post():
-        content,aID,aName,timestamp = fetch_random_quote("db/quotes.sqlite", 124680630075260928, cfg['mastodon']['exclude_users'])
+        id,content,aID,aName,timestamp,karma = fetch_random_quote("db/quotes.sqlite", 124680630075260928, cfg['mastodon']['exclude_users'])
 
         content = strip_discord_format(content)
         

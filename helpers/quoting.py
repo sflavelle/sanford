@@ -99,7 +99,7 @@ def update_karma(db: str,qid,karma):
     
 def rename_user(id, fallback: str):
     for k,v in cfg['mappings']['users'].items():
-        if k in id:
+        if str(k) in id:
             # Found our author!
             return v
     else:
