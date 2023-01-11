@@ -7,6 +7,7 @@ from datetime import datetime,timedelta,timezone
 import asyncio
 import yaml
 import sys
+import io
 import os
 import logging
 import logging.handlers
@@ -239,20 +240,27 @@ async def stampfinder_err(ctx, error):
 @sanford.tree.command()
 @app_commands.guilds(TGC)
 @app_commands.rename(exclude_in_mastoposter='dont_send_quotes')
-@app_commands.describe(exclude_in_mastoposter="Exclude your quotes from being posted to @tgcooc?")
-async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: bool):
+@app_commands.describe(exclude_in_mastoposter="Exclude your quotes from being posted to @tgcooc?", masto_alias="Set your name for when you are mentioned in a quote by @tgcooc.")
+async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: bool = None, masto_alias: str = None):
     """Configure settings relating to you in the @tgcooc Mastodon account."""
     global cfg
+    if not(exclude_in_mastoposter) and not(masto_alias):
+        await interaction.response.send_message(f"Here's what I have for you right now in relation to the quote bot at https://social.thegeneral.chat/@tgcooc :\n\nYou have chosen to **{'prevent' if interaction.user.id in cfg['mastodon']['exclude_users'] else 'allow' }** posting of your quotes on Mastodon.\nYou are currently referred to as **{cfg['mappings']['users'][interaction.user.id] if bool(cfg['mappings']['users'][interaction.user.id]) else 'nobody (masto_alias not set!)'}** if you are the author of, or mentioned in, a quote.",ephemeral=True)
     try:
         if exclude_in_mastoposter is not None:
             if exclude_in_mastoposter == True:
                 cfg['mastodon']['exclude_users'].append(interaction.user.id)
-            else: cfg['mastodon']['exclude_users'].remove(interaction.user.id)
-            with open('config.yaml', 'w') as file:
-                yaml.dump(cfg, file)
-            with open('config.yaml', 'r') as file:
-                cfg = yaml.safe_load(file)
-            logger.info(f"/mastodon: {interaction.user.name} added themselves to the excluded_users list")
+                logger.info(f"/mastodon: {interaction.user.name} added themselves to the excluded_users list")
+            else:
+                cfg['mastodon']['exclude_users'].remove(interaction.user.id)
+                logger.info(f"/mastodon: {interaction.user.name} removed themselves from the excluded_users list")
+        if masto_alias is not None:
+            cfg['mappings']['users'][interaction.user.id] = masto_alias
+            
+        with open('config.yaml', 'w') as file:
+            yaml.dump(cfg, file)
+        with open('config.yaml', 'r') as file:
+            cfg = yaml.safe_load(file)
             await interaction.response.send_message("Your settings were updated.",ephemeral=True)
     except io.UnsupportedOperation as error:
         logger.error("Issue reading the config file!", error)
