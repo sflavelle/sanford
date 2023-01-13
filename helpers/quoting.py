@@ -1,5 +1,5 @@
 from datetime import datetime
-import sqlite3
+import psycopg2
 import discord
 import yaml
 import re
@@ -56,7 +56,12 @@ def format_quote(content,timestamp,authorID=None,authorName=None,bot=None,format
                 return embed
 
 def fetch_random_quote(db: str,gid,exclude_list: list=list(())):
-    con = sqlite3.connect(db)
+    con = psycopg2.connect(
+        database = cfg['postgresql']['database'],
+        host = cfg['postgresql']['host'],
+        user = cfg['postgresql']['user'],
+        password = cfg['postgresql']['password'],
+)
     cur = con.cursor()
     exclude = ""
     if bool(exclude_list):
@@ -69,11 +74,17 @@ def fetch_random_quote(db: str,gid,exclude_list: list=list(())):
     except TypeError as error:
         if "NoneType object" in str(error):
             raise LookupError("Sorry, there aren't any quotes saved in this server yet.\n\nTo save a quote, right-click a message and navigate to `Apps > Save as quote!`. If you want to save a message manually (eg. something said in voice, IRL or in a game), the `/quote add` command will help you save those quotes.")
+    cur.close()
     con.close()
     return (id, content, aID, aName, timestamp, karma)
 
 def user_random_quote(db: str,gid,uid,exclude_list: list=list(())):
-    con = sqlite3.connect(db)
+    con = psycopg2.connect(
+        database = cfg['postgresql']['database'],
+        host = cfg['postgresql']['host'],
+        user = cfg['postgresql']['user'],
+        password = cfg['postgresql']['password'],
+)
     cur = con.cursor()
     exclude = ""
     if bool(exclude_list):
@@ -86,15 +97,21 @@ def user_random_quote(db: str,gid,uid,exclude_list: list=list(())):
     except TypeError as error:
         if bool(uid) and "NoneType object" in str(error):
             raise LookupError("Sorry, that user doesn't have any quotes saved in this server yet!")
-
+    cur.close()
     con.close()
     return (id, content, aID, aName, timestamp, karma)
 
-def update_karma(db: str,qid,karma):
-    con = sqlite3.connect(db)
+def update_karma(qid,karma):
+    con = psycopg2.connect(
+        database = cfg['postgresql']['database'],
+        host = cfg['postgresql']['host'],
+        user = cfg['postgresql']['user'],
+        password = cfg['postgresql']['password'],
+)
     cur = con.cursor()
     cur.execute("UPDATE quotes SET karma=? WHERE ID=?", (karma, qid))
     con.commit()
+    cur.close()
     con.close()
     
 def rename_user(id, fallback: str):
@@ -114,7 +131,8 @@ def strip_discord_format(str):
     usermatches = user.finditer(str)
     
     for match in usermatches:
-        str = str.replace(f"<@{match[0]}>", rename_user(match[0], '(no id match)'))
+        str = str.replace(f"<@{match[0]}>", rename_user(match[0], '(user id here, no match)'))
+        str = str.replace(f"<@!{match[0]}>", rename_user(match[0], '(user id here, no match)'))
         
     return str
             

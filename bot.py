@@ -13,7 +13,7 @@ import logging
 import logging.handlers
 # Other helpful libraries
 from pluralkit import Client as PK
-import sqlite3
+import psycopg2
 from dateutil.parser import *
 import dateutil
 # Import custom libraries
@@ -43,8 +43,14 @@ cfg = None
 with open('config.yaml', 'r') as file:
     cfg = yaml.safe_load(file)
 
-# set variables
-db = "db/quotes.sqlite"
+# init database connection
+con = psycopg2.connect(
+    database = cfg['postgresql']['database'],
+    host = cfg['postgresql']['host'],
+    user = cfg['postgresql']['user'],
+    password = cfg['postgresql']['password'],
+    async_ = True
+)
 
 # configure subscribed intents
 intents = discord.Intents.default()
@@ -111,7 +117,6 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
     logger.info(f"Stampfinder: Attempting to resolve missing timestamps and message IDs for quotes in #{channel.name}")
     delta = datetime.now()
         
-    con = sqlite3.connect(db) # autocommit=False for now, as I don't want to break the database in production with these changes
     cur = con.cursor() 
     
     cur.execute(f"SELECT id,content,authorID FROM quotes WHERE guild='{str(ctx.guild.id)}' AND authorID != '' AND timestamp IS NULL ORDER BY id ASC")
@@ -211,7 +216,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                                     datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
                                     int(row[0])
                                     ))
-                            except sqlite3.Error as error:
+                            except psycopg2.DatabaseError as error:
                                 await ctx.send(f'Error: SQL Update Failed due to:\n```{str(error)}```')
                                 logger.error("QUOTE SQL ERROR:\n" + str(error))
                                 break
@@ -225,7 +230,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
             delta = datetime.now() - delta
             logger.info(f"Done! Found sources for {str(hitcounter)} out of {str(len(untimestamped))} quotes in {str(msgcounter)} messages in #{channel.name}")
             await ctx.send(f"Done! Found sources for **{str(hitcounter)}** out of {str(len(untimestamped))} quotes in **{str(msgcounter)} messages** in <#{channel.id}>.\nTime taken: **{strfdelta(delta, '{hours} hours, {minutes} minutes, {seconds} seconds')}**.")
-    con.close()
+    cur.close()
         
 @stampfinder.error
 async def stampfinder_err(ctx, error):
@@ -331,7 +336,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
     
     quoteview.set_footer(text=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'} this time).")
     
-    update_karma(db,qid,newkarma)
+    update_karma(qid,newkarma)
     await qmsg.edit(embed=quoteview)
     await qmsg.clear_reactions()
 
@@ -340,7 +345,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
 async def quote_addbyhand(interaction: discord.Interaction, author: discord.Member, content: str, time: str=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z")):
     """Create a quote manually, eg. for things said in VOIP"""
     try:
-        con = sqlite3.connect(db)
+        # con = sqlite3.connect(db) # Migrating from Sqlite
         cur = con.cursor()
         
         # Parse entered timestamp
@@ -378,7 +383,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
             post_new_quote(content, author.id, int(datetime.timestamp(timestamp)))
         
         con.close()
-    except sqlite3.Error as error:
+    except psycopg2.DatabaseError as error:
         await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
         logger.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
     except dateutil.parser._parser.ParserError as error:
@@ -390,7 +395,12 @@ sanford.tree.add_command(quote_group)
 async def quote_save(interaction: discord.Interaction, message: discord.Message):
 
     try:
-        con = sqlite3.connect(db)
+        con = psycopg2.connect(
+            database = cfg['postgresql']['database'],
+            host = cfg['postgresql']['host'],
+            user = cfg['postgresql']['user'],
+            password = cfg['postgresql']['password'],
+        )
         cur = con.cursor()
 
         # Check for duplicates first
@@ -459,7 +469,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         
         con.close()
 
-    except sqlite3.Error as error:
+    except psycopg2.DatabaseError as error:
         await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
         logger.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
     except LookupError as error:
