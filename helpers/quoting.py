@@ -3,6 +3,7 @@ import psycopg2
 import discord
 import yaml
 import re
+import asyncio
 
 with open('config.yaml', 'r') as file:
     cfg = yaml.safe_load(file)
@@ -120,7 +121,8 @@ def insert_quote(quote_data: tuple):
     cur.execute("INSERT INTO bot.quotes (content, authorid, authorname, addedby, guild, msgid, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;", quote_data)
     qid = cur.fetchone()[0]
     con.commit()
-    
+    cur.close()
+    con.close()
     return qid
 
 def update_karma(qid,karma):
@@ -135,6 +137,39 @@ def update_karma(qid,karma):
     con.commit()
     cur.close()
     con.close()
+    
+async def karma_helper(interaction: discord.Interaction, qid, karma):
+    # config vars
+    timeout = cfg['sanford']['quoting']['vote_timeout']
+    # Let's allow the quote to be voted on
+    thumbsUp, thumbsDown = "👍", "👎"
+    
+    imsg = await interaction.original_response()
+    msg = await imsg.fetch()
+    
+    await msg.add_reaction(thumbsUp)
+    await msg.add_reaction(thumbsDown)
+    
+    
+    await asyncio.sleep(60*timeout) # Wait 3 minutes before collecting reactions
+    
+    msg = await msg.fetch()
+    
+    upCount = 0
+    downCount = 0
+    
+    # Count the reactions (Sanfords doesn't count)
+    for e in msg.reactions:
+        match e.emoji:
+            case "👍":
+                upCount = e.count - 1
+            case "👎":
+                downCount = e.count - 1
+                
+    karmadiff = 0 + upCount - downCount
+    newkarma = karma + karmadiff
+    
+    return (qid, newkarma)
     
 ### MASTOPOSTER-CENTRIC FUNCTIONS
     
