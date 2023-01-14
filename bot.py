@@ -210,7 +210,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                             
                             # OK, this is the part where we actually update the database
                             try: 
-                                cur.execute("UPDATE quotes SET msgID=?, timestamp=?, updatedAt=? WHERE ID=?", (
+                                cur.execute("UPDATE quotes SET msgID= %s, timestamp= %s, updatedAt= %s WHERE ID= %s", (
                                     message.id, 
                                     int(datetime.timestamp(message.created_at)),
                                     datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
@@ -335,10 +335,13 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
     newkarma = karma + karmadiff
     
     quoteview.set_footer(text=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'} this time).")
-    
-    update_karma(qid,newkarma)
-    await qmsg.edit(embed=quoteview)
-    await qmsg.clear_reactions()
+    try:
+        update_karma(qid,newkarma)
+        await qmsg.edit(embed=quoteview)
+        await qmsg.clear_reactions()
+    except Exception as error:
+        quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma} (no change due to error: {error}")
+        await qmsg.edit(embed=quoteview)
 
 @quote_group.command(name="add")
 @app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened')
