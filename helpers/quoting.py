@@ -55,30 +55,9 @@ def format_quote(content,timestamp,authorID=None,authorName=None,bot=None,format
                 )
                 return embed
 
-def fetch_random_quote(db: str,gid,exclude_list: list=list(())):
-    con = psycopg2.connect(
-        database = cfg['postgresql']['database'],
-        host = cfg['postgresql']['host'],
-        user = cfg['postgresql']['user'],
-        password = cfg['postgresql']['password'],
-)
-    cur = con.cursor()
-    exclude = ""
-    if bool(exclude_list):
-        exclude = f"AND authorID NOT IN ({str(exclude_list).strip('[]')})"
+### SQL FUNCTIONS
 
-    # Fetch a random quote from the SQL database
-    try:
-        cur.execute(f"SELECT id,content,authorID,authorName,timestamp,karma FROM bot.quotes WHERE guild='{str(gid)}' AND authorid is not null {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
-        id,content,aID,aName,timestamp,karma = cur.fetchone()
-    except TypeError as error:
-        if "NoneType object" in str(error):
-            raise LookupError("Sorry, there aren't any quotes saved in this server yet.\n\nTo save a quote, right-click a message and navigate to `Apps > Save as quote!`. If you want to save a message manually (eg. something said in voice, IRL or in a game), the `/quote add` command will help you save those quotes.")
-    cur.close()
-    con.close()
-    return (id, content, aID, aName, timestamp, karma)
-
-def user_random_quote(db: str,gid,uid,exclude_list: list=list(())):
+def fetch_random_quote(gid,exclude_list: list=list(())):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
@@ -92,7 +71,30 @@ def user_random_quote(db: str,gid,uid,exclude_list: list=list(())):
 
     # Fetch a random quote from the SQL database
     try:
-        cur.execute(f"SELECT id,content,authorID,authorName,timestamp,karma FROM bot.quotes WHERE guild='{str(gid)}' AND authorid = {int(uid)} {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
+        cur.execute(f"SELECT id,content,authorid,authorname,timestamp,karma FROM bot.quotes WHERE guild='{str(gid)}' AND authorid is not null {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
+        id,content,aID,aName,timestamp,karma = cur.fetchone()
+    except TypeError as error:
+        if "NoneType object" in str(error):
+            raise LookupError("Sorry, there aren't any quotes saved in this server yet.\n\nTo save a quote, right-click a message and navigate to `Apps > Save as quote!`. If you want to save a message manually (eg. something said in voice, IRL or in a game), the `/quote add` command will help you save those quotes.")
+    cur.close()
+    con.close()
+    return (id, content, aID, aName, timestamp, karma)
+
+def user_random_quote(gid,uid,exclude_list: list=list(())):
+    con = psycopg2.connect(
+        database = cfg['postgresql']['database'],
+        host = cfg['postgresql']['host'],
+        user = cfg['postgresql']['user'],
+        password = cfg['postgresql']['password'],
+)
+    cur = con.cursor()
+    exclude = ""
+    if bool(exclude_list):
+        exclude = f"AND authorid NOT IN ({str(exclude_list).strip('[]')})"
+
+    # Fetch a random quote from the SQL database
+    try:
+        cur.execute(f"SELECT id,content,authorid,authorname,timestamp,karma FROM bot.quotes WHERE guild='{str(gid)}' AND authorid = {int(uid)} {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
         id,content,aID,aName,timestamp,karma = cur.fetchone()
     except TypeError as error:
         if bool(uid) and "NoneType object" in str(error):
@@ -101,22 +103,44 @@ def user_random_quote(db: str,gid,uid,exclude_list: list=list(())):
     con.close()
     return (id, content, aID, aName, timestamp, karma)
 
+def insert_quote(quote_data: tuple):
+    con = psycopg2.connect(
+        database = cfg['postgresql']['database'],
+        host = cfg['postgresql']['host'],
+        user = cfg['postgresql']['user'],
+        password = cfg['postgresql']['password'],
+    )
+    cur = con.cursor()
+    
+    # Validate quote tuple first
+    if len(quote_data) != 7:
+        raise Exception(f"Quote object has {len(quote_data)} items (should be 7)")
+    
+    
+    cur.execute("INSERT INTO bot.quotes (content, authorid, authorname, addedby, guild, msgid, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;", quote_data)
+    qid = cur.fetchone()[0]
+    con.commit()
+    
+    return qid
+
 def update_karma(qid,karma):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
         user = cfg['postgresql']['user'],
         password = cfg['postgresql']['password'],
-)
+    )
     cur = con.cursor()
-    cur.execute("UPDATE quotes SET karma= %s WHERE id= %s", (karma, qid))
+    cur.execute("UPDATE bot.quotes SET karma= %s WHERE id= %s", (karma, qid))
     con.commit()
     cur.close()
     con.close()
     
+### MASTOPOSTER-CENTRIC FUNCTIONS
+    
 def rename_user(id, fallback: str):
     for k,v in cfg['mappings']['users'].items():
-        if str(k) in id:
+        if k == id:
             # Found our author!
             return v
     else:

@@ -278,9 +278,9 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
     """Get a random quote!"""
     try:
         if bool(user):
-            qid,content,aID,aName,timestamp,karma = user_random_quote("db/quotes.sqlite",interaction.guild_id, user.id)
+            qid,content,aID,aName,timestamp,karma = user_random_quote(interaction.guild_id, user.id)
         else:
-            qid,content,aID,aName,timestamp,karma = fetch_random_quote("db/quotes.sqlite",interaction.guild_id)
+            qid,content,aID,aName,timestamp,karma = fetch_random_quote(interaction.guild_id)
     except LookupError as error:
         await interaction.response.send_message(str(error), ephemeral=True)
         return
@@ -348,26 +348,21 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
 async def quote_addbyhand(interaction: discord.Interaction, author: discord.Member, content: str, time: str=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z")):
     """Create a quote manually, eg. for things said in VOIP"""
     try:
-        # con = sqlite3.connect(db) # Migrating from Sqlite
-        cur = con.cursor()
         
         # Parse entered timestamp
         timestamp = parse(time, default=datetime.now())
         
-        sql_values = list((
+        sql_values = (
             content,
             author.id,
             author.name,
             interaction.user.id,
             interaction.guild_id,
             None,
-            int(datetime.timestamp(timestamp)),
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z")
-        ))
+            int(datetime.timestamp(timestamp))
+        )
         
-        cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
-        con.commit()
+        insert_quote(sql_values)
 
         logger.info("Quote saved successfully")
         logger.debug(format_quote(content, authorName=author.name, timestamp=int(datetime.timestamp(timestamp))))
@@ -407,21 +402,19 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         cur = con.cursor()
 
         # Check for duplicates first
-        check_dupe = cur.execute("SELECT 1 from quotes WHERE msgID='" + str(message.id) + "'")
-        if check_dupe.fetchone() is not None:
+        cur.execute("SELECT 1 from bot.quotes WHERE msgID='" + str(message.id) + "'")
+        if cur.fetchone() is not None:
             raise LookupError('This quote is already in the database.')
 
-        sql_values = list((
+        sql_values = (
             message.content, 
             message.author.id,
             message.author.name,
             interaction.user.id,
             interaction.guild_id,
             message.id,
-            int(datetime.timestamp(message.created_at)),
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z")
-            ))
+            int(datetime.timestamp(message.created_at))
+            )
 
         # # PluralKit check
         if message.webhook_id:
@@ -448,10 +441,9 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
                     await interaction.response.send_message(error,ephemeral=True)
                 except TypeError as error:
                     await interaction.response.send_message(error.with_traceback,ephemeral=True)
-                    logger.error("TypeError somewhere in the PK check code!", error.with_traceback)
+                    logger.error("TypeError somewhere in the PK check code!", error)
         
-        cur.execute("INSERT INTO quotes (content, authorID, authorName, addedBy, guild, msgID, timestamp, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);", sql_values)
-        con.commit()
+        qid = insert_quote(sql_values)
 
         quote = format_quote(message.content, authorID=message.author.id, timestamp=int(message.created_at.timestamp()), format='discord_embed')
         quote.add_field(name='Status',value=f'[Quote]({message.jump_url}) saved successfully.')
@@ -473,8 +465,9 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         con.close()
 
     except psycopg2.DatabaseError as error:
-        await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
-        logger.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
+        await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error)}```',ephemeral=True)
+        logger.error("QUOTE SQL ERROR:")
+        logger.error(error, exc_info=1)
     except LookupError as error:
         await interaction.response.send_message('Good News! This quote was already saved.',ephemeral=True)
         logger.info("Quote was already saved previously")
