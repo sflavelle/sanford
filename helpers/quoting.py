@@ -109,7 +109,7 @@ def update_karma(qid,karma):
         password = cfg['postgresql']['password'],
 )
     cur = con.cursor()
-    cur.execute("UPDATE quotes SET karma=? WHERE id=?", (karma, qid))
+    cur.execute("UPDATE quotes SET karma= %s WHERE id= %s", (karma, qid))
     con.commit()
     cur.close()
     con.close()
