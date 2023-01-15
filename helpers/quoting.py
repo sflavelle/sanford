@@ -118,12 +118,12 @@ def insert_quote(quote_data: tuple):
         raise Exception(f"Quote object has {len(quote_data)} items (should be 7)")
     
     
-    cur.execute("INSERT INTO bot.quotes (content, authorid, authorname, addedby, guild, msgid, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;", quote_data)
-    qid = cur.fetchone()[0]
+    cur.execute("INSERT INTO bot.quotes (content, authorid, authorname, addedby, guild, msgid, timestamp) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, karma;", quote_data)
+    returning = cur.fetchone()
     con.commit()
     cur.close()
     con.close()
-    return qid
+    return returning
 
 def update_karma(qid,karma):
     con = psycopg2.connect(

@@ -39,9 +39,12 @@ logger.addHandler(handler)
 # init vars?
 cfg = None
 
+
 # load config
 with open('config.yaml', 'r') as file:
     cfg = yaml.safe_load(file)
+
+qvote_timeout = cfg['sanford']['quoting']['vote_timeout']
 
 # init database connection
 con = psycopg2.connect(
@@ -294,8 +297,6 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
     except LookupError as error:
         await interaction.response.send_message(str(error), ephemeral=True)
         return
-
-    qvote_timeout = cfg['sanford']['quoting']['vote_timeout']
     
     # Is the user still in the server?
     authorObject = None
@@ -313,45 +314,24 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
         quoteview.set_thumbnail(url=authorAvatar.url)
     else:
         quoteview.set_thumbnail(url="https://cdn.thegeneral.chat/sanford/special-avatars/sanford-quote-noicon.png")
-    quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
+    if cfg['sanford']['quoting']['voting'] == True: quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
     # Send the resulting quote
     await interaction.response.send_message(allowed_mentions=discord.AllowedMentions.none(),embed=quoteview)
     
-    # Let's allow the quote to be voted on
-    thumbsUp, thumbsDown = "👍", "👎"
-    
-    qmsg = await interaction.original_response()
-    
-    await qmsg.add_reaction(thumbsUp)
-    await qmsg.add_reaction(thumbsDown)
-    
-    
-    await asyncio.sleep(60*qvote_timeout) # Wait 3 minutes before collecting reactions
-    
-    qmsg = await interaction.channel.fetch_message(qmsg.id)
-    
-    upCount = 0
-    downCount = 0
-    
-    # Count the reactions (Sanfords doesn't count)
-    for e in qmsg.reactions:
-        match e.emoji:
-            case "👍":
-                upCount = e.count - 1
-            case "👎":
-                downCount = e.count - 1
-                
-    karmadiff = 0 + upCount - downCount
-    newkarma = karma + karmadiff
-    
-    quoteview.set_footer(text=f"Score: {'+' if newkarma > 0 else ''}{newkarma} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'} this time).")
-    try:
-        update_karma(qid,newkarma)
-        await qmsg.edit(embed=quoteview)
-        await qmsg.clear_reactions()
-    except Exception as error:
-        quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma} (no change due to error: {error}")
-        await qmsg.edit(embed=quoteview)
+    if cfg['sanford']['quoting']['voting'] == True:
+        qmsg = await interaction.original_response()
+        
+        newkarma = await karma_helper(interaction, qid, karma)
+        karmadiff = newkarma[1] - karma
+        
+        try:
+            quoteview.set_footer(text=f"Score: {'+' if newkarma[1] > 0 else ''}{newkarma[1]} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'} this time).")
+            update_karma(qid,newkarma[1])
+            await qmsg.edit(embed=quoteview)
+            await qmsg.clear_reactions()
+        except Exception as error:
+            quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma} (no change due to error: {error}")
+            await qmsg.edit(embed=quoteview)
 
 @quote_group.command(name="add")
 @app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened')
@@ -372,7 +352,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
             int(datetime.timestamp(timestamp))
         )
         
-        insert_quote(sql_values)
+        qid,karma = insert_quote(sql_values)
 
         logger.info("Quote saved successfully")
         logger.debug(format_quote(content, authorName=author.name, timestamp=int(datetime.timestamp(timestamp))))
@@ -381,7 +361,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         quote.add_field(name='Status',value=f'Quote saved successfully.')
         authorAvatar = author.display_avatar
         quote.set_thumbnail(url=authorAvatar.url)
-
+        if cfg['sanford']['quoting']['voting'] == True: quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
         await interaction.response.send_message(
             embed=quote,
             allowed_mentions=discord.AllowedMentions.none()
@@ -389,6 +369,21 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         
         if interaction.guild_id == 124680630075260928 and author.id not in cfg['mastodon']['exclude_users']:
             post_new_quote(content, author.id, int(datetime.timestamp(timestamp)))
+            
+        if cfg['sanford']['quoting']['voting'] == True:
+            qmsg = await interaction.original_response()
+            
+            newkarma = await karma_helper(interaction, qid, karma)
+            karmadiff = newkarma[1] - karma
+            
+            try:
+                quote.set_footer(text=f"Score: {'+' if newkarma[1] > 0 else ''}{newkarma[1]} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'} this time).")
+                update_karma(qid,newkarma[1])
+                await qmsg.edit(embed=quote)
+                await qmsg.clear_reactions()
+            except Exception as error:
+                quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma} (no change due to error: {error}")
+                await qmsg.edit(embed=quote)
         
         con.close()
     except psycopg2.DatabaseError as error:
@@ -415,6 +410,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         cur.execute("SELECT 1 from bot.quotes WHERE msgID='" + str(message.id) + "'")
         if cur.fetchone() is not None:
             raise LookupError('This quote is already in the database.')
+        con.close()
 
         sql_values = (
             message.content, 
@@ -453,7 +449,8 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
                     await interaction.response.send_message(error.with_traceback,ephemeral=True)
                     logger.error("TypeError somewhere in the PK check code!", error)
         
-        qid = insert_quote(sql_values)
+        qid,karma = insert_quote(sql_values)
+        if karma == None: karma = 1
 
         quote = format_quote(message.content, authorID=message.author.id, timestamp=int(message.created_at.timestamp()), format='discord_embed')
         quote.add_field(name='Status',value=f'[Quote]({message.jump_url}) saved successfully.')
@@ -463,6 +460,8 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 
         logger.info("Quote saved successfully")
         logger.debug(format_quote(message.content, authorName=message.author.name, timestamp=int(message.created_at.timestamp())),)
+        
+        if cfg['sanford']['quoting']['voting'] == True: quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
 
         await interaction.response.send_message(
             embed=quote,
@@ -471,8 +470,22 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         
         if interaction.guild_id == 124680630075260928 and message.author.id not in cfg['mastodon']['exclude_users']:
             post_new_quote(message.content, (sql_values[1] if message.webhook_id else message.author.id), int(message.created_at.timestamp()))
+            
+        if cfg['sanford']['quoting']['voting'] == True:
+            qmsg = await interaction.original_response()
+            
+            newkarma = await karma_helper(interaction, qid, karma)
+            karmadiff = newkarma[1] - karma
+            
+            try:
+                quote.set_footer(text=f"Score: {'+' if newkarma[1] > 0 else ''}{newkarma[1]} ({'went up by +{karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff > 0 else 'went down by {karmadiff} pts'.format(karmadiff=karmadiff) if karmadiff < 0 else 'did not change'} this time).")
+                update_karma(qid,newkarma[1])
+                await qmsg.edit(embed=quote)
+                await qmsg.clear_reactions()
+            except Exception as error:
+                quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma} (no change due to error: {error}")
+                await qmsg.edit(embed=quote)
         
-        con.close()
 
     except psycopg2.DatabaseError as error:
         await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error)}```',ephemeral=True)
