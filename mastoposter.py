@@ -1,12 +1,10 @@
 from mastodon import Mastodon
 import yaml
-import sqlite3
+import psycopg2
 import re
 import argparse
 from helpers.quoting import rename_user,strip_discord_format
 
-con = sqlite3.connect("db/quotes.sqlite")
-cur = con.cursor()
 
 import schedule
 import time
@@ -17,6 +15,14 @@ from helpers.quoting import format_quote,fetch_random_quote
 # load config
 with open('config.yaml', 'r') as file:
     cfg = yaml.safe_load(file)
+
+con = psycopg2.connect(
+    database = cfg['postgresql']['database'],
+    host = cfg['postgresql']['host'],
+    user = cfg['postgresql']['user'],
+    password = cfg['postgresql']['password'],
+)
+cur = con.cursor()
 
 mastodon = Mastodon(
         access_token = cfg['mastodon']['access_token'],
@@ -47,12 +53,12 @@ if __name__ == "__main__":
 
 
     def post():
-        id,content,aID,aName,timestamp,karma = fetch_random_quote("db/quotes.sqlite", 124680630075260928, cfg['mastodon']['exclude_users'])
+        id,content,aID,aName,timestamp,karma = fetch_random_quote(124680630075260928, cfg['mastodon']['exclude_users'])
 
         content = strip_discord_format(content)
         
         # Console logging
-        print("'" + content + "' - " + rename_user(aID, f'no map for user {aID}') + " (ID " + aID + ", timestamp " + str(timestamp) + ")")
+        print("'" + content + "' - " + rename_user(aID, f'no map for user {str(aID)}') + " (ID " + str(aID) + ", timestamp " + str(timestamp) + ")")
 
         quote = format_quote(content,authorName=rename_user(aID,f'(@splatsune@thegeneral.chat has no map for user {aID}!)'),timestamp=timestamp)
             
