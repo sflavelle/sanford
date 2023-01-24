@@ -117,12 +117,19 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
     
     # Alright, let's start by initialising a connection to the database
     
+    con = psycopg2.connect(
+        database = cfg['postgresql']['database'],
+        host = cfg['postgresql']['host'],
+        user = cfg['postgresql']['user'],
+        password = cfg['postgresql']['password'],
+    )
+    
     logger.info(f"Stampfinder: Attempting to resolve missing timestamps and message IDs for quotes in #{channel.name}")
     delta = datetime.now()
         
     cur = con.cursor() 
     
-    cur.execute(f"SELECT id,content,authorID FROM quotes WHERE guild='{str(ctx.guild.id)}' AND authorID != '' AND timestamp IS NULL ORDER BY id ASC")
+    cur.execute(f"SELECT id,content,authorid FROM bot.quotes WHERE guild='{str(ctx.guild.id)}' AND authorID is not NULL AND (timestamp IS NULL OR addedby is NULL) ORDER BY id ASC")
     
     # Sadly, SELECT statements don't have a rowcount or len in the cur, so we /have/ to fetchall
     untimestamped = cur.fetchall()
@@ -172,6 +179,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
             
             logger.info("Stampfinder: Here we go")
             
+                    
             msgcounter = 0 # Count total messages
             hitcounter = 0 # Count matching messages
                         
@@ -186,13 +194,13 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                     logger.debug(f"processing message {msgcounter} (currently exploring {message.created_at.strftime('%B %d, %Y')})")
                     if msgcounter % 1000 == 0:
                         logger.info(f"processing message {msgcounter} (currently exploring {message.created_at.strftime('%B %d, %Y')})")
-                        await progressmsg.edit(content = f"**Progress:** **{msgcounter}** messages searched, **{hitcounter}/{len(untimestamped)}** quote timestamps found.")
+                        await progressmsg.edit(content = f"**Progress:** **{msgcounter}** messages searched (currently exploring {message.created_at.strftime('%B %d, %Y')}), **{hitcounter}/{len(untimestamped)}** quote timestamps found.")
                     for row in untimestamped:
                         # First, check that between when we started and now,
                         # we did not get a timestamp/message ID added
 
                         # This of course
-                        cur.execute(f"SELECT 1 from quotes WHERE id='{row[0]}' AND (timestamp IS NULL OR msgID IS NULL)")
+                        cur.execute(f"SELECT 1 from bot.quotes WHERE id='{row[0]}' AND (timestamp IS NULL OR msgID IS NULL OR addedby IS NULL)")
                         check_dupe = cur.fetchall()
                         
                         if not(bool(check_dupe)):
@@ -211,13 +219,18 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                             logger.debug(f'quote content: {row[1]}\nquote author: {row[2]}')
                             logger.debug(f'message content: {message.content}\nmessage author: {message.author.id}')
                             
+                            addedby = ""
+                            if message.content.startswith('Bucket, addquote') or message.content.startswith('//addquote'):
+                                addedby = message.author.id
+                            
                             # OK, this is the part where we actually update the database
                             try: 
-                                cur.execute("UPDATE quotes SET msgID= %s, timestamp= %s, updatedAt= %s WHERE ID= %s", (
+                                cur.execute("UPDATE bot.quotes SET msgID= %s, timestamp= %s, updatedAt= %s, addedby = %s WHERE ID= %s", (
                                     message.id, 
                                     int(datetime.timestamp(message.created_at)),
                                     datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
-                                    int(row[0])
+                                    addedby if bool(addedby) else None,
+                                    int(row[0]),
                                     ))
                             except psycopg2.DatabaseError as error:
                                 await ctx.send(f'Error: SQL Update Failed due to:\n```{str(error)}```')
@@ -307,7 +320,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
         
     
     quoteview = discord.Embed(
-        description=format_quote(content, timestamp, authorID=aID if bool(authorObject) else None, authorName=aName, format='markdown')
+        description=format_quote(content, timestamp, authorID=aID if authorObject is not None else None, authorName=aName, format='markdown')
     )
     if bool(authorObject):
         authorAvatar = authorObject.display_avatar
@@ -391,6 +404,102 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         logger.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
     except dateutil.parser._parser.ParserError as error:
         await interaction.response.send_message(f'Error: {error}',ephemeral=True)
+        
+@quote_group.command(name="lb")
+async def quote_leaderboards(interaction: discord.Interaction):
+    '''Quote leaderboards!'''
+    leaderboard = discord.Embed(
+        title=f"{interaction.guild.name} Quote Leaderboards",
+        description=f"These are the rankings as of right now"
+        )
+    
+    con = psycopg2.connect(
+        database = cfg['postgresql']['database'],
+        host = cfg['postgresql']['host'],
+        user = cfg['postgresql']['user'],
+        password = cfg['postgresql']['password'],
+    )
+    cur = con.cursor()
+    
+    # Might take a bit, so
+    await interaction.response.send_message(content=":thinking:")
+        
+    # Most Quotes
+    try:
+        cur.execute(f"SELECT count(*) as quotes, authorid FROM bot.quotes WHERE guild={str(interaction.guild.id)} GROUP BY authorid ORDER BY quotes desc LIMIT 10")
+
+        lb_mostquoted = cur.fetchall()
+        lb_mq_list = []
+        for count,author in lb_mostquoted:
+            try:
+                user = await sanford.fetch_user(author)
+            except Exception as err:
+                user = "???"
+            lb_mq_list.append(f"{str(user)}: **{count}**")
+            
+        lb_mq_string = "\n".join(lb_mq_list)
+        
+        leaderboard.add_field(
+            name="Top 10 Most Quoted",
+            value=lb_mq_string,
+            inline=False
+        )
+    except Exception as err:
+        logger.error(err)
+        await interaction.edit_original_response(content=err)
+        return
+    
+    # Most Average Karma
+    try:
+        cur.execute(f"SELECT avg(karma), authorid FROM bot.quotes WHERE guild={str(interaction.guild.id)} GROUP BY authorid ORDER BY avg desc LIMIT 5")
+
+        lb_bestkarma = cur.fetchall()
+        lb_bk_list = []
+        for count,author in lb_bestkarma:
+            try:
+                user = await sanford.fetch_user(author)
+            except Exception as err:
+                user = "???"
+            lb_bk_list.append(f"{str(user)}: **{count:.2f}**")
+            
+        lb_bk_string = "\n".join(lb_bk_list)
+        
+        leaderboard.add_field(
+            name="Top 5 Highest Average Karma",
+            value=lb_bk_string,
+            inline=True
+        )
+    except Exception as err:
+        logger.error(err)
+        await interaction.edit_original_response(content=err)
+        return
+            
+    # Most Saved
+    try:
+        cur.execute(f"SELECT count(*), addedby FROM bot.quotes WHERE guild={str(interaction.guild.id)} GROUP BY addedby ORDER BY count desc LIMIT 5")
+
+        lb_mostsaved = cur.fetchall()
+        lb_ms_list = []
+        for count,author in lb_mostsaved:
+            try:
+                user = await sanford.fetch_user(author)
+            except Exception as err:
+                user = "???"
+            lb_ms_list.append(f"{str(user)}: **{count}**")
+            
+        lb_ms_string = "\n".join(lb_ms_list)
+        
+        leaderboard.add_field(
+            name="Top 5 Most Saves",
+            value=lb_ms_string,
+            inline=True
+        )
+    except Exception as err:
+        logger.error(err)
+        await interaction.edit_original_response(content=err)
+        return
+    
+    await interaction.edit_original_response(content=None,embed=leaderboard)
         
 sanford.tree.add_command(quote_group)
 
