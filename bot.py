@@ -315,6 +315,9 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
     authorObject = None
     try: 
         authorObject = await interaction.guild.fetch_member(aID)
+        if authorObject == None:
+            author = await sanford.fetch_user(aID)
+            if author: aName = author.name
     except:
         pass
         
