@@ -506,6 +506,72 @@ async def quote_leaderboards(interaction: discord.Interaction):
         
 sanford.tree.add_command(quote_group)
 
+@sanford.tree.context_menu(name='Leaderboard Stats')
+async def quote_save(interaction: discord.Interaction, member: discord.Member):
+    con = psycopg2.connect(
+        database = cfg['postgresql']['database'],
+        host = cfg['postgresql']['host'],
+        user = cfg['postgresql']['user'],
+        password = cfg['postgresql']['password'],
+    )
+    cur = con.cursor()
+    
+    def findIndex(l, index, value):
+        for pos, t in enumerate(l):
+            if t[index] == value:
+                return pos
+        raise ValueError("list.index(x): x not in list")
+    
+    # Might take a bit, so
+    # await interaction.response.send_message(content=":thinking:",ephemeral=true)
+        
+    # Most Quotes
+    try:
+        cur.execute(f"SELECT count(*) as quotes, authorid FROM bot.quotes WHERE guild={str(interaction.guild.id)} GROUP BY authorid ORDER BY quotes desc")
+
+        lb_mostquoted = cur.fetchall()
+
+    except Exception as err:
+        logger.error(err)
+        await interaction.edit_original_response(content=err)
+        return
+    
+    # Most Average Karma
+    try:
+        cur.execute(f"SELECT avg(karma), authorid FROM bot.quotes WHERE guild={str(interaction.guild.id)} GROUP BY authorid ORDER BY avg desc")
+
+        lb_bestkarma = cur.fetchall()
+    except Exception as err:
+        logger.error(err)
+        await interaction.edit_original_response(content=err)
+        return
+            
+    # Most Saved
+    try:
+        cur.execute(f"SELECT count(*), addedby FROM bot.quotes WHERE guild={str(interaction.guild.id)} GROUP BY addedby ORDER BY count desc")
+
+        lb_mostsaved = cur.fetchall()
+    except Exception as err:
+        logger.error(err)
+        await interaction.edit_original_response(content=err)
+        return
+    
+    try:
+        quoterank = lb_mostquoted[findIndex(lb_mostquoted, 1, member.id)] if findIndex(lb_mostquoted, 1, member.id) else None
+    except: quoterank = None
+    try: 
+        karmarank = lb_bestkarma[findIndex(lb_bestkarma, 1, member.id)] if findIndex(lb_bestkarma, 1, member.id) else None
+    except: karmarank = None
+    try:
+        savedrank = lb_mostsaved[findIndex(lb_mostsaved, 1, member.id)] if findIndex(lb_mostsaved, 1, member.id) else None
+    except: savedrank = None
+    
+    rankmsg = f"{member.mention} is **rank {findIndex(lb_mostquoted, 1, member.id) + 1}** with **{quoterank[0]}** quotes." if quoterank else ""
+    rankmsg += f"\n{member.mention} has an average karma score of **{karmarank[0]:.3f}**, making them **rank {findIndex(lb_bestkarma, 1, member.id) + 1}** in karma." if karmarank else ""
+    rankmsg += f"\n{member.mention} has saved **{savedrank[0]} quotes**, making them **rank {findIndex(lb_mostsaved, 1, member.id) + 1}** in saved quotes." if savedrank else ""
+    
+    await interaction.response.send_message(content=rankmsg,ephemeral=True)
+
 @sanford.tree.context_menu(name='Save as quote!')
 async def quote_save(interaction: discord.Interaction, message: discord.Message):
 
