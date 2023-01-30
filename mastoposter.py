@@ -51,10 +51,13 @@ if __name__ == "__main__":
     arguments.add_argument('--debug', action='store_true', help='Debug mode. Posts every two minutes instead')
     args = arguments.parse_args()
 
+    usedids = []
 
     def post():
         id,content,aID,aName,timestamp,karma = fetch_random_quote(124680630075260928, cfg['mastodon']['exclude_users'])
-
+        while id in usedids: # if id has been used recently
+            id,content,aID,aName,timestamp,karma = fetch_random_quote(124680630075260928, cfg['mastodon']['exclude_users'])
+        usedids.append(id)
         content = strip_discord_format(content)
         
         # Console logging
@@ -62,7 +65,10 @@ if __name__ == "__main__":
 
         quote = format_quote(content,authorName=rename_user(aID,f'(@splatsune@thegeneral.chat has no map for user {aID}!)'),timestamp=timestamp)
             
-        mastodon.status_post(quote)
+        try:
+            mastodon.status_post(quote)
+        except mastodon.errors.MastodonAPIError as error:
+            print(f'Could not post this time due to: {error}')
 
     if args.debug == True:
         # Schedule to run every 3 minutes (for testing)
@@ -70,8 +76,8 @@ if __name__ == "__main__":
         schedule.every(2).minutes.do(post)
     else:
         # Schedule to run every 2 hours
-        print('Posting every 2 hours')
-        schedule.every(2).hours.at("00:00").do(post)
+        print('Posting every 3 hours')
+        schedule.every(3).hours.at("00:00").do(post)
 
     while True:
         schedule.run_pending()
