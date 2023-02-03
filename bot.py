@@ -313,23 +313,30 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
     
     # Is the user still in the server?
     authorObject = None
+    authorAvatar = None
     try: 
         authorObject = await interaction.guild.fetch_member(aID)
-        if authorObject == None:
-            author = await sanford.fetch_user(aID)
-            if author: aName = author.name
     except:
         pass
         
+    if bool(authorObject):
+        authorAvatar = authorObject.display_avatar
+    else:
+        author = await sanford.fetch_user(aID)
+        if author:
+            aName = author.name
+            authorAvatar = author.display_avatar
+        else: 
+            aName = rename_user(aID, "'unknown', yeah, let's go with that")
     
     quoteview = discord.Embed(
         description=format_quote(content, timestamp, authorID=aID if authorObject is not None else None, authorName=aName, format='markdown')
     )
-    if bool(authorObject):
-        authorAvatar = authorObject.display_avatar
-        quoteview.set_thumbnail(url=authorAvatar.url)
-    else:
-        quoteview.set_thumbnail(url="https://cdn.thegeneral.chat/sanford/special-avatars/sanford-quote-noicon.png")
+    
+    # Set avatar
+    if bool(authorAvatar): quoteview.set_thumbnail(url=authorAvatar.url)
+    else: quoteview.set_thumbnail(url="https://cdn.thegeneral.chat/sanford/special-avatars/sanford-quote-noicon.png")
+    
     if cfg['sanford']['quoting']['voting'] == True: quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
     # Send the resulting quote
     await interaction.response.send_message(allowed_mentions=discord.AllowedMentions.none(),embed=quoteview)
@@ -373,7 +380,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         logger.info("Quote saved successfully")
         logger.debug(format_quote(content, authorName=author.name, timestamp=int(datetime.timestamp(timestamp))))
         
-        quote = format_quote(content, authorName=author.name, timestamp=int(datetime.timestamp(timestamp)), format='discord_embed')
+        quote = format_quote(content, authorID=author.id, authorName=author.name, timestamp=int(datetime.timestamp(timestamp)), format='discord_embed')
         quote.add_field(name='Status',value=f'Quote saved successfully.')
         authorAvatar = author.display_avatar
         quote.set_thumbnail(url=authorAvatar.url)
