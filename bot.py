@@ -287,16 +287,6 @@ async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: boo
         logger.error("Issue reading the config file!", error)
         await interaction.response.send_message("There was an issue reading the file.",ephemeral=True)
         
-@sanford.tree.command()
-@app_commands.guilds(TGC)
-async def karmatest(interaction: discord.Interaction, testid: int):
-    await interaction.response.send_message(f"This is a test message called by {interaction.user} to test the abstracted karma system. Rate it as you wish.")
-    try: 
-        karmascore = await karma_helper(interaction, testid, 0)
-    except Exception as error:
-        await interaction.edit_original_response(content=f"KarmaHelper failed due to: `{error}`")
-    await interaction.edit_original_response(content=f"Karma test complete. If this message has appeared, this hopefully means that things work!\n\nThanks to you, this karma test (id {karmascore[0]}) gained a score of {karmascore[1]}.")
-
 quote_group = app_commands.Group(name='quote',description='Save or recall memorable messages')
 
 @quote_group.command(name="get")
