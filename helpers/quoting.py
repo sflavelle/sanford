@@ -190,8 +190,8 @@ def strip_discord_format(str):
     usermatches = user.finditer(str)
     
     for match in usermatches:
-        str = str.replace(f"<@{match[0]}>", rename_user(match[0], '(user id here, no match)'))
-        str = str.replace(f"<@!{match[0]}>", rename_user(match[0], '(user id here, no match)'))
+        str = str.replace(f"<@{match.group(1)}>", rename_user(match.group(1), '(user id here, no match)'))
+        str = str.replace(f"<@!{match.group(1)}>", rename_user(match.group(1), '(user id here, no match)'))
         
     return str
             

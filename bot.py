@@ -473,6 +473,31 @@ async def quote_leaderboards(interaction: discord.Interaction):
         logger.error(err)
         await interaction.edit_original_response(content=err)
         return
+    
+    # Most Karma (Total)
+    try:
+        cur.execute(f"SELECT (sum(karma) - count(*)) as score, authorid FROM bot.quotes WHERE guild={str(interaction.guild.id)} GROUP BY authorid ORDER BY score desc LIMIT 5")
+
+        lb_mostkarma = cur.fetchall()
+        lb_mk_list = []
+        for count,author in lb_mostkarma:
+            try:
+                user = await sanford.fetch_user(author)
+            except Exception as err:
+                user = "???"
+            lb_mk_list.append(f"{str(user)}: **{count}**")
+            
+        lb_mk_string = "*Automatic point excluded currently.*\n" + "\n".join(lb_mk_list)
+        
+        leaderboard.add_field(
+            name="Top 5 Most Karma",
+            value=lb_mk_string,
+            inline=True
+        )
+    except Exception as err:
+        logger.error(err)
+        await interaction.edit_original_response(content=err)
+        return
             
     # Most Saved
     try:
@@ -542,6 +567,17 @@ async def quote_save(interaction: discord.Interaction, member: discord.Member):
         logger.error(err)
         await interaction.edit_original_response(content=err)
         return
+    
+    
+    # Most Karma (Total)
+    try:
+        cur.execute(f"SELECT (sum(karma) - count(*)) as score, authorid FROM bot.quotes WHERE guild={str(interaction.guild.id)} GROUP BY authorid ORDER BY score desc")
+
+        lb_mostkarma = cur.fetchall()
+    except Exception as err:
+        logger.error(err)
+        await interaction.edit_original_response(content=err)
+        return
             
     # Most Saved
     try:
@@ -559,12 +595,16 @@ async def quote_save(interaction: discord.Interaction, member: discord.Member):
     try: 
         karmarank = lb_bestkarma[findIndex(lb_bestkarma, 1, member.id)] if findIndex(lb_bestkarma, 1, member.id) else None
     except: karmarank = None
+    try: 
+        karmascore = lb_mostkarma[findIndex(lb_mostkarma, 1, member.id)] if findIndex(lb_mostkarma, 1, member.id) else None
+    except: karmascore = None
     try:
         savedrank = lb_mostsaved[findIndex(lb_mostsaved, 1, member.id)] if findIndex(lb_mostsaved, 1, member.id) else None
     except: savedrank = None
     
     rankmsg = f"{member.mention} is **rank {findIndex(lb_mostquoted, 1, member.id) + 1}** with **{quoterank[0]}** quotes." if quoterank else ""
-    rankmsg += f"\n{member.mention} has an average karma score of **{karmarank[0]:.3f}**, making them **rank {findIndex(lb_bestkarma, 1, member.id) + 1}** in karma." if karmarank else ""
+    rankmsg += f"\n{member.mention} has an *average* karma score of **{karmarank[0]}**, making them **rank {findIndex(lb_bestkarma, 1, member.id) + 1}** in karma." if karmarank else ""
+    rankmsg += f"\n{member.mention} has a *total* karma score of **{karmascore[0]}**, making them **rank {findIndex(lb_mostkarma, 1, member.id) + 1}** in karma." if karmascore else ""
     rankmsg += f"\n{member.mention} has saved **{savedrank[0]} quotes**, making them **rank {findIndex(lb_mostsaved, 1, member.id) + 1}** in saved quotes." if savedrank else ""
     
     await interaction.response.send_message(content=rankmsg,ephemeral=True)
