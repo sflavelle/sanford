@@ -603,7 +603,7 @@ async def quote_save(interaction: discord.Interaction, member: discord.Member):
     except: savedrank = None
     
     rankmsg = f"{member.mention} is **rank {findIndex(lb_mostquoted, 1, member.id) + 1}** with **{quoterank[0]}** quotes." if quoterank else ""
-    rankmsg += f"\n{member.mention} has an *average* karma score of **{karmarank[0]}**, making them **rank {findIndex(lb_bestkarma, 1, member.id) + 1}** in karma." if karmarank else ""
+    rankmsg += f"\n{member.mention} has an *average* karma score of **{karmarank[0]:.3f}**, making them **rank {findIndex(lb_bestkarma, 1, member.id) + 1}** in karma." if karmarank else ""
     rankmsg += f"\n{member.mention} has a *total* karma score of **{karmascore[0]}**, making them **rank {findIndex(lb_mostkarma, 1, member.id) + 1}** in karma." if karmascore else ""
     rankmsg += f"\n{member.mention} has saved **{savedrank[0]} quotes**, making them **rank {findIndex(lb_mostsaved, 1, member.id) + 1}** in saved quotes." if savedrank else ""
     
