@@ -67,7 +67,7 @@ if __name__ == "__main__":
             
         try:
             mastodon.status_post(quote)
-        except mastodon.errors.MastodonAPIError as error:
+        except MastodonAPIError as error:
             print(f'Could not post this time due to: {error}')
 
     if args.debug == True:
