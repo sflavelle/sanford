@@ -10,7 +10,8 @@ import sys
 import io
 import os
 import logging
-import logging.handlers
+from systemd.journal import JournalHandler
+import traceback
 # Other helpful libraries
 from pluralkit import Client as PK
 import psycopg2
@@ -18,22 +19,12 @@ from dateutil.parser import *
 import dateutil
 # Import custom libraries
 from helpers.quoting import *
-from mastoposter import post_new_quote
+# from mastoposter import post_new_quote # Semi-bork
 
 # setup logging
 logger = logging.getLogger('discord')
+handler = JournalHandler()
 logger.setLevel(logging.INFO)
-logging.getLogger('discord').setLevel(logging.DEBUG)
-
-handler = logging.handlers.RotatingFileHandler(
-    filename='logs/sanford.log',
-    encoding='utf-8',
-    maxBytes=8 * 1024 * 1024,  # 32 MiB
-    backupCount=10,  # Rotate through 5 files
-)
-dt_fmt = '%Y-%m-%d %H:%M:%S'
-formatter = logging.Formatter('[{asctime}] [{levelname:<8}] {name}: {message}', dt_fmt, style='{')
-handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 # init vars?
@@ -50,6 +41,7 @@ qvote_timeout = cfg['sanford']['quoting']['vote_timeout']
 con = psycopg2.connect(
     database = cfg['postgresql']['database'],
     host = cfg['postgresql']['host'],
+    port = cfg['postgresql']['port'],
     user = cfg['postgresql']['user'],
     password = cfg['postgresql']['password'],
     async_ = True
@@ -63,7 +55,12 @@ intents.message_content = True
 TGC = discord.Object(id=124680630075260928)
 
 # setup command framework
-sanford = commands.Bot(command_prefix="&",intents=intents)
+sanford = commands.Bot(
+	command_prefix="&",
+	intents=intents,
+	allowed_contexts=app_commands.AppCommandContext(guild=True,dm_channel=True,private_channel=True),
+	allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+	)
 
 # init Pluralkit API
 pluralkit = PK(cfg['sanford']['pluralkit_token'])
@@ -120,6 +117,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
+        port = cfg['postgresql']['port'],
         user = cfg['postgresql']['user'],
         password = cfg['postgresql']['password'],
     )
@@ -261,7 +259,8 @@ async def stampfinder_err(ctx, error):
 @sanford.tree.command()
 @app_commands.guilds(TGC)
 @app_commands.rename(exclude_in_mastoposter='dont_send_quotes')
-@app_commands.describe(exclude_in_mastoposter="Exclude your quotes from being posted to @tgcooc?", masto_alias="Set your name for when you are mentioned in a quote by @tgcooc.")
+@app_commands.describe(	exclude_in_mastoposter="Exclude your quotes from being posted to @tgcooc?",
+			masto_alias="Set your name for when you are mentioned in a quote by @tgcooc.")
 async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: bool = None, masto_alias: str = None):
     """Configure settings relating to you in the @tgcooc Mastodon account."""
     global cfg
@@ -286,19 +285,34 @@ async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: boo
     except io.UnsupportedOperation as error:
         logger.error("Issue reading the config file!", error)
         await interaction.response.send_message("There was an issue reading the file.",ephemeral=True)
-        
+
 quote_group = app_commands.Group(name='quote',description='Save or recall memorable messages')
 
 @quote_group.command(name="get")
-async def quote_get(interaction: discord.Interaction, user: discord.Member=None):
+@app_commands.describe(	expose_me="When posting your own quotes in other servers, allow quotes from anywhere.")
+async def quote_get(interaction: discord.Interaction, user: discord.User=None, expose_me: bool = False):
     """Get a random quote!"""
+    
     try:
-        if bool(user):
-            qid,content,aID,aName,timestamp,karma = user_random_quote(interaction.guild_id, user.id)
+        if bool(user) and expose_me:
+            if user.id != interaction.user.id:
+                await interaction.response.send_message(
+                	":no_entry_sign: Just FYI, `expose_me` will only work if you're exposing yourself.",
+                	ephemeral=True
+                	)
+                return
+            qid,content,aID,aName,timestamp,karma = random_quote(None, user.id)
+        elif isinstance(interaction.channel, discord.abc.PrivateChannel) and bool(user):
+            qid,content,aID,aName,timestamp,karma = random_quote(None, user.id)
+        elif bool(user):
+            qid,content,aID,aName,timestamp,karma = random_quote(interaction.guild_id, user.id)
         else:
-            qid,content,aID,aName,timestamp,karma = fetch_random_quote(interaction.guild_id)
+            qid,content,aID,aName,timestamp,karma = random_quote(interaction.guild_id, None)
     except LookupError as error:
         await interaction.response.send_message(str(error), ephemeral=True)
+        return
+    except Exception as error:
+        logger.exception(error)
         return
     
     # Is the user still in the server?
@@ -327,13 +341,13 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
     if bool(authorAvatar): quoteview.set_thumbnail(url=authorAvatar.url)
     else: quoteview.set_thumbnail(url="https://cdn.thegeneral.chat/sanford/special-avatars/sanford-quote-noicon.png")
     
-    if cfg['sanford']['quoting']['voting'] == True: quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
+    if cfg['sanford']['quoting']['voting'] == True and interaction.is_guild_integration(): quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
     # Send the resulting quote
     await interaction.response.send_message(allowed_mentions=discord.AllowedMentions.none(),embed=quoteview)
     
-    if cfg['sanford']['quoting']['voting'] == True:
+    if cfg['sanford']['quoting']['voting'] == True and interaction.is_guild_integration():
         qmsg = await interaction.original_response()
-        
+
         newkarma = await karma_helper(interaction, qid, karma)
         karmadiff = newkarma[1] - karma
         
@@ -345,6 +359,12 @@ async def quote_get(interaction: discord.Interaction, user: discord.Member=None)
         except Exception as error:
             quoteview.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma} (no change due to error: {error}")
             await qmsg.edit(embed=quoteview)
+
+@quote_group.command(name="top")
+@app_commands.describe(author='User whose quotes you want to see')
+async def quote_topquotes(interaction: discord.Interaction, author: discord.Member=None):
+    """See the top quotes of the server, or of a user"""
+    await interaction.response.send_message(":no_entry_sign: Coming whenever Splatsune gets the spoons.",ephemeral=True)
 
 @quote_group.command(name="add")
 @app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened')
@@ -360,7 +380,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
             author.id,
             author.name,
             interaction.user.id,
-            interaction.guild_id,
+            interaction.guild_id if interaction.guild_id else interaction.channel.id,
             None,
             int(datetime.timestamp(timestamp))
         )
@@ -374,7 +394,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         quote.add_field(name='Status',value=f'Quote saved successfully.')
         authorAvatar = author.display_avatar
         quote.set_thumbnail(url=authorAvatar.url)
-        if cfg['sanford']['quoting']['voting'] == True: quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
+        if cfg['sanford']['quoting']['voting'] == True and interaction.is_guild_integration(): quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
         await interaction.response.send_message(
             embed=quote,
             allowed_mentions=discord.AllowedMentions.none()
@@ -383,7 +403,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         if interaction.guild_id == 124680630075260928 and author.id not in cfg['mastodon']['exclude_users']:
             post_new_quote(content, author.id, int(datetime.timestamp(timestamp)))
             
-        if cfg['sanford']['quoting']['voting'] == True:
+        if cfg['sanford']['quoting']['voting'] == True and interaction.is_guild_integration():
             qmsg = await interaction.original_response()
             
             newkarma = await karma_helper(interaction, qid, karma)
@@ -487,7 +507,7 @@ async def quote_leaderboards(interaction: discord.Interaction):
                 user = "???"
             lb_mk_list.append(f"{str(user)}: **{count}**")
             
-        lb_mk_string = "*Automatic point excluded currently.*\n" + "\n".join(lb_mk_list)
+        lb_mk_string = "\n".join(lb_mk_list)
         
         leaderboard.add_field(
             name="Top 5 Most Karma",

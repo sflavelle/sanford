@@ -4,9 +4,17 @@ import discord
 import yaml
 import re
 import asyncio
+import logging
+from systemd.journal import JournalHandler
 
 with open('config.yaml', 'r') as file:
     cfg = yaml.safe_load(file)
+
+# setup logging
+logger = logging.getLogger('helpers')
+handler = JournalHandler()
+logger.setLevel(logging.DEBUG)
+logger.addHandler(handler)
 
 def format_quote(content,timestamp,authorID=None,authorName=None,bot=None,format: str='plain'):
     quote_string_id = '''"{0}"
@@ -58,44 +66,26 @@ def format_quote(content,timestamp,authorID=None,authorName=None,bot=None,format
 
 ### SQL FUNCTIONS
 
-def fetch_random_quote(gid,exclude_list: list=list(())):
+def random_quote(gid: int,uid: int = None,sort_order: str = "random()"):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
+        port = cfg['postgresql']['port'],
         user = cfg['postgresql']['user'],
         password = cfg['postgresql']['password'],
 )
     cur = con.cursor()
-    exclude = ""
-    if bool(exclude_list):
-        exclude = f"AND authorid NOT IN ({str(exclude_list).strip('[]')})"
+    
+    where_filter = []
+    if bool(gid): where_filter.append(f"guild='{str(gid)}'")
+    if bool(uid): where_filter.append(f"authorid={str(uid)}")
+#    if bool(exclude_list): where_filter.append(f"authorid NOT IN ({str(exclude_list).strip('[]')})")
 
+    query = f"SELECT id,content,authorid,authorname,timestamp,karma FROM bot.quotes WHERE {' AND '.join(where_filter)} ORDER BY {sort_order} LIMIT 1"
+    logger.debug(query)
     # Fetch a random quote from the SQL database
     try:
-        cur.execute(f"SELECT id,content,authorid,authorname,timestamp,karma FROM bot.quotes WHERE guild='{str(gid)}' AND authorid is not null {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
-        id,content,aID,aName,timestamp,karma = cur.fetchone()
-    except TypeError as error:
-        if "NoneType object" in str(error):
-            raise LookupError("Sorry, there aren't any quotes saved in this server yet.\n\nTo save a quote, right-click a message and navigate to `Apps > Save as quote!`. If you want to save a message manually (eg. something said in voice, IRL or in a game), the `/quote add` command will help you save those quotes.")
-    cur.close()
-    con.close()
-    return (id, content, aID, aName, timestamp, karma)
-
-def user_random_quote(gid,uid,exclude_list: list=list(())):
-    con = psycopg2.connect(
-        database = cfg['postgresql']['database'],
-        host = cfg['postgresql']['host'],
-        user = cfg['postgresql']['user'],
-        password = cfg['postgresql']['password'],
-)
-    cur = con.cursor()
-    exclude = ""
-    if bool(exclude_list):
-        exclude = f"AND authorid NOT IN ({str(exclude_list).strip('[]')})"
-
-    # Fetch a random quote from the SQL database
-    try:
-        cur.execute(f"SELECT id,content,authorid,authorname,timestamp,karma FROM bot.quotes WHERE guild='{str(gid)}' AND authorid = {int(uid)} {exclude if bool(exclude_list) else ''} ORDER BY random() LIMIT 1")
+        cur.execute(query)
         id,content,aID,aName,timestamp,karma = cur.fetchone()
     except TypeError as error:
         if bool(uid) and "NoneType object" in str(error):
@@ -108,6 +98,7 @@ def insert_quote(quote_data: tuple):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
+        port = cfg['postgresql']['port'],
         user = cfg['postgresql']['user'],
         password = cfg['postgresql']['password'],
     )
@@ -129,6 +120,7 @@ def update_karma(qid,karma):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
+        port = cfg['postgresql']['port'],
         user = cfg['postgresql']['user'],
         password = cfg['postgresql']['password'],
     )
@@ -185,7 +177,7 @@ def strip_discord_format(str):
     emoji = re.compile(r"<(:\S+:)\d+>")
     user = re.compile(r"<@!?(\d+)>")
     # replace emoji mentions with just the :emoji: string
-    str = re.sub(emoji,"\g<1>",str)
+    str = re.sub(emoji,r"\g<1>",str)
     
     usermatches = user.finditer(str)
     
