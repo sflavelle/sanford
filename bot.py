@@ -86,7 +86,7 @@ async def cmdsync(ctx):
 async def reboot(ctx):
     await ctx.send("Reloading the bot...")
     logger.warning("Rebooting the bot!")
-    os.execv(sys.executable,['python3.11'] + sys.argv)
+    os.execv(sys.executable,['python3.12'] + sys.argv)
     
 @sanford.command()
 @commands.is_owner()
@@ -306,6 +306,19 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
             qid,content,aID,aName,timestamp,karma = random_quote(None, user.id)
         elif bool(user):
             qid,content,aID,aName,timestamp,karma = random_quote(interaction.guild_id, user.id)
+        elif isinstance(interaction.channel, discord.abc.PrivateChannel):
+            # Discord can't support this for user apps!
+            # Reason being, it cannot access the list of recipients in a channel, in a user app context
+            # Which is totally fine, but I have to let the user know that they need to specify
+            # who they want a quote of
+            await interaction.response.send_message(
+            	":no_entry_sign: You'll need to specify a user when getting quotes in a private channel.\n"
+            	"This is because Discord doesn't support getting the list of users when you install the app to your account,"
+            	" which is *good* because it means apps like this one can't harvest your data willy-nilly!\n"
+            	"So for now, just remember to select a user you want a quote from.",
+            	ephemeral=True
+            	)
+            return
         else:
             qid,content,aID,aName,timestamp,karma = random_quote(interaction.guild_id, None)
     except LookupError as error:
@@ -380,7 +393,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
             author.id,
             author.name,
             interaction.user.id,
-            interaction.guild_id if interaction.guild_id else interaction.channel.id,
+            interaction.guild_id if bool(interaction.guild_id) else interaction.channel.id,
             None,
             int(datetime.timestamp(timestamp))
         )
@@ -436,6 +449,7 @@ async def quote_leaderboards(interaction: discord.Interaction):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
+        port = cfg['postgresql']['port'],
         user = cfg['postgresql']['user'],
         password = cfg['postgresql']['password'],
     )
@@ -553,6 +567,7 @@ async def quote_save(interaction: discord.Interaction, member: discord.Member):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
+        port= cfg['postgresql']['port'],
         user = cfg['postgresql']['user'],
         password = cfg['postgresql']['password'],
     )
@@ -636,6 +651,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         con = psycopg2.connect(
             database = cfg['postgresql']['database'],
             host = cfg['postgresql']['host'],
+            port = cfg['postgresql']['port'],
             user = cfg['postgresql']['user'],
             password = cfg['postgresql']['password'],
         )
@@ -652,7 +668,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
             message.author.id,
             message.author.name,
             interaction.user.id,
-            interaction.guild_id,
+            interaction.guild_id if bool(interaction.guild_id) else interaction.channel.id,
             message.id,
             int(datetime.timestamp(message.created_at))
             )
@@ -696,17 +712,17 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         logger.info("Quote saved successfully")
         logger.debug(format_quote(message.content, authorName=message.author.name, timestamp=int(message.created_at.timestamp())),)
         
-        if cfg['sanford']['quoting']['voting'] == True: quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
+        if cfg['sanford']['quoting']['voting'] == True and interaction.is_guild_integration(): quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
 
         await interaction.response.send_message(
             embed=quote,
             allowed_mentions=discord.AllowedMentions.none()
             )
         
-        if interaction.guild_id == 124680630075260928 and message.author.id not in cfg['mastodon']['exclude_users']:
-            post_new_quote(message.content, (sql_values[1] if message.webhook_id else message.author.id), int(message.created_at.timestamp()))
+        #if interaction.guild_id == 124680630075260928 and message.author.id not in cfg['mastodon']['exclude_users']:
+        #    post_new_quote(message.content, (sql_values[1] if message.webhook_id else message.author.id), int(message.created_at.timestamp()))
             
-        if cfg['sanford']['quoting']['voting'] == True:
+        if cfg['sanford']['quoting']['voting'] == True and interaction.is_guild_integration():
             qmsg = await interaction.original_response()
             
             newkarma = await karma_helper(interaction, qid, karma)

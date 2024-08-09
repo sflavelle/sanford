@@ -18,7 +18,7 @@ with open('config.yaml', 'r') as file:
 
 con = psycopg2.connect(
     database = cfg['postgresql']['database'],
-    host = cfg['postgresql']['host'],
+    host = cfg['postgresql']['host'] if hasattr(cfg['postgresql'], "host") else None,
     user = cfg['postgresql']['user'],
     password = cfg['postgresql']['password'],
 )
