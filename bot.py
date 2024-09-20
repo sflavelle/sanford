@@ -378,7 +378,7 @@ async def quote_sanitycheck(interaction: discord.Interaction, public: bool = Fal
     """Check how many quotes are missing details"""
 
     def percentage(part, whole):
-        Percentage = 100 * float(part)/float(whole)
+        Percentage = float(part)/float(whole)
         return f"{Percentage:.2%}"
 
     try:
