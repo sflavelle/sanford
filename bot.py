@@ -372,9 +372,48 @@ async def quote_topquotes(interaction: discord.Interaction, author: discord.Memb
     """See the top quotes of the server, or of a user"""
     await interaction.response.send_message(":no_entry_sign: Coming whenever Splatsune gets the spoons.",ephemeral=True)
 
+@quote_group.command(name="sanity")
+@app_commands.describe(public='Publish the results to everyone?')
+async def quote_sanitycheck(interaction: discord.Interaction, public: bool = False):
+    """Check how many quotes are missing details"""
+
+    def percentage(part, whole):
+        Percentage = 100 * float(part)/float(whole)
+        return str(Percentage) + “%”
+
+    try:
+        sql_query = '''select 
+            count(*) as total,
+            sum(case when timestamp is null then 1 else 0 end) as nullstamps,
+            sum(case when source is null then 1 else 0 end) as nullsource,
+            sum(case when msgid is null then 1 else 0 end) as nullids
+            from bot.quotes'''
+
+        con = psycopg2.connect(
+                database = cfg['postgresql']['database'],
+                host = cfg['postgresql']['host'],
+                port = cfg['postgresql']['port'],
+                user = cfg['postgresql']['user'],
+                password = cfg['postgresql']['password'],
+        )
+            cur = con.cursor()
+
+        cur.execute(sql_query)
+        qtotal,qnullstamps,qnullsource,qnullids = cur.fetchone()
+
+        message = f'''Out of **{qtotal}** total quotes stored by Sanford...
+        
+        **{qnullstamps}** (*{percentage(qnullstamps,qtotal)}*) have no timestamp and will display as from 'Octember 32'.
+        **{qnullsource}** (*{percentage(qnullsource,qtotal)}*)have no source (implemented <t:1726835400:R>) and cannot be linked to.
+        **{qnullids}** (*{percentage(qnullids,qtotal)}*) have no message ID, used internally. These quotes may have come from elsewhere, or may have been manually imported.'''
+
+        await interaction.response.send_message(message,ephemeral=public)
+
+
+
 @quote_group.command(name="add")
-@app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened')
-async def quote_addbyhand(interaction: discord.Interaction, author: discord.Member, content: str, time: str=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z")):
+@app_commands.describe(author='User who said the quote',content='The quote itself',time='When the quote happened',source='URL where the quote came from, if applicable')
+async def quote_addbyhand(interaction: discord.Interaction, author: discord.Member, content: str, time: str=datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"), source: str = None):
     """Create a quote manually, eg. for things said in VOIP"""
     try:
         
