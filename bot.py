@@ -379,7 +379,7 @@ async def quote_sanitycheck(interaction: discord.Interaction, public: bool = Fal
 
     def percentage(part, whole):
         Percentage = 100 * float(part)/float(whole)
-        return str(Percentage) + "%"
+        return f"{Percentage:.2%}"
 
     try:
         sql_query = '''select 
@@ -401,11 +401,11 @@ async def quote_sanitycheck(interaction: discord.Interaction, public: bool = Fal
         cur.execute(sql_query)
         qtotal,qnullstamps,qnullsource,qnullids = cur.fetchone()
 
-        message = f'''Out of **{qtotal}** total quotes stored by Sanford...
+        message = f'''Out of **{qtotal:,}** total quotes stored by Sanford...
         
-        **{qnullstamps}** (*{percentage(qnullstamps,qtotal)}*) have no timestamp and will display as from 'Octember 32'.
-        **{qnullsource}** (*{percentage(qnullsource,qtotal)}*)have no source (implemented <t:1726835400:R>) and cannot be linked to.
-        **{qnullids}** (*{percentage(qnullids,qtotal)}*) have no message ID, used internally. These quotes may have come from elsewhere, or may have been manually imported.'''
+        **{qnullstamps:,}** (*{percentage(qnullstamps,qtotal)}*) have no timestamp and will display as from 'Octember 32'.
+        **{qnullsource:,}** (*{percentage(qnullsource,qtotal)}*)have no source (implemented <t:1726835400:R>) and cannot be linked to.
+        **{qnullids:,}** (*{percentage(qnullids,qtotal)}*) have no message ID, used internally. These quotes may have come from elsewhere, or may have been manually imported.'''
 
         await interaction.response.send_message(message,ephemeral=public)
     except psycopg2.DatabaseError as error:
