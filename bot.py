@@ -408,6 +408,9 @@ async def quote_sanitycheck(interaction: discord.Interaction, public: bool = Fal
         **{qnullids}** (*{percentage(qnullids,qtotal)}*) have no message ID, used internally. These quotes may have come from elsewhere, or may have been manually imported.'''
 
         await interaction.response.send_message(message,ephemeral=public)
+    except psycopg2.DatabaseError as error:
+        await interaction.response.send_message(f'Error: SQL Failed due to:\n```{str(error.with_traceback)}```',ephemeral=True)
+        logger.error("QUOTE SQL ERROR:\n" + str(error.with_traceback))
 
 
 
