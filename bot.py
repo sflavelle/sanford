@@ -379,7 +379,7 @@ async def quote_sanitycheck(interaction: discord.Interaction, public: bool = Fal
 
     def percentage(part, whole):
         Percentage = 100 * float(part)/float(whole)
-        return str(Percentage) + “%”
+        return str(Percentage) + "%"
 
     try:
         sql_query = '''select 
