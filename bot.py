@@ -189,7 +189,7 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                         # we did not get a timestamp/message ID added
 
                         # This of course
-                        cur.execute(f"SELECT 1 from bot.quotes WHERE id='{row[0]}' AND (timestamp IS NULL OR msgID IS NULL OR addedby IS NULL)")
+                        cur.execute(f"SELECT 1 from bot.quotes WHERE id='{row[0]}' AND (timestamp IS NULL OR source IS NULL OR msgID IS NULL OR addedby IS NULL)")
                         check_dupe = cur.fetchall()
                         
                         if not(bool(check_dupe)):
