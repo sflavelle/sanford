@@ -74,15 +74,6 @@ def strfdelta(tdelta, fmt):
 
 @sanford.command()
 @commands.is_owner()
-async def cmdsync(ctx):
-    logger.info("Syncing commands to Discord.")
-    await sanford.tree.sync()
-    await sanford.tree.sync(guild=TGC)
-    logger.info("Command syncing complete!")
-    await ctx.send("Done.")
-
-@sanford.command()
-@commands.is_owner()
 async def reboot(ctx):
     await ctx.send("Reloading the bot...")
     logger.warning("Rebooting the bot!")
@@ -223,11 +214,12 @@ async def stampfinder(ctx, *, channel: typing.Union[discord.TextChannel, discord
                             
                             # OK, this is the part where we actually update the database
                             try: 
-                                cur.execute("UPDATE bot.quotes SET msgID= %s, timestamp= %s, updatedAt= %s, addedby = %s WHERE ID= %s", (
+                                cur.execute("UPDATE bot.quotes SET msgID= %s, timestamp= %s, updatedAt= %s, addedby = %s, source = %s WHERE ID= %s", (
                                     message.id, 
                                     int(datetime.timestamp(message.created_at)),
                                     datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f %z"),
                                     addedby if bool(addedby) else None,
+                                    message.jump_url,
                                     int(row[0]),
                                     ))
                             except psycopg2.DatabaseError as error:
@@ -289,6 +281,7 @@ async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: boo
 quote_group = app_commands.Group(name='quote',description='Save or recall memorable messages')
 
 @quote_group.command(name="get")
+@app_commands.rename(expose_me="Fetch from ALL servers")
 @app_commands.describe(	expose_me="When posting your own quotes in other servers, allow quotes from anywhere.")
 async def quote_get(interaction: discord.Interaction, user: discord.User=None, expose_me: bool = False):
     """Get a random quote!"""
@@ -301,11 +294,11 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
                 	ephemeral=True
                 	)
                 return
-            qid,content,aID,aName,timestamp,karma = random_quote(None, user.id)
+            qid,content,aID,aName,timestamp,karma,source = random_quote(None, user.id)
         elif isinstance(interaction.channel, discord.abc.PrivateChannel) and bool(user):
-            qid,content,aID,aName,timestamp,karma = random_quote(None, user.id)
+            qid,content,aID,aName,timestamp,karma,source = random_quote(None, user.id)
         elif bool(user):
-            qid,content,aID,aName,timestamp,karma = random_quote(interaction.guild_id, user.id)
+            qid,content,aID,aName,timestamp,karma,source = random_quote(interaction.guild_id, user.id)
         elif isinstance(interaction.channel, discord.abc.PrivateChannel):
             # Discord can't support this for user apps!
             # Reason being, it cannot access the list of recipients in a channel, in a user app context
@@ -320,7 +313,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
             	)
             return
         else:
-            qid,content,aID,aName,timestamp,karma = random_quote(interaction.guild_id, None)
+            qid,content,aID,aName,timestamp,karma,source = random_quote(interaction.guild_id, None)
     except LookupError as error:
         await interaction.response.send_message(str(error), ephemeral=True)
         return
@@ -347,7 +340,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
             aName = rename_user(aID, "'unknown', yeah, let's go with that")
     
     quoteview = discord.Embed(
-        description=format_quote(content, timestamp, authorID=aID if authorObject is not None else None, authorName=aName, format='markdown')
+        description=format_quote(content, timestamp, authorID=aID if authorObject is not None else None, authorName=aName, source=source, format='markdown')
     )
     
     # Set avatar
@@ -395,7 +388,8 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
             interaction.user.id,
             interaction.guild_id if bool(interaction.guild_id) else interaction.channel.id,
             None,
-            int(datetime.timestamp(timestamp))
+            int(datetime.timestamp(timestamp),
+            message.jump_url)
         )
         
         qid,karma = insert_quote(sql_values)
@@ -563,7 +557,7 @@ async def quote_leaderboards(interaction: discord.Interaction):
 sanford.tree.add_command(quote_group)
 
 @sanford.tree.context_menu(name='Leaderboard Stats')
-async def quote_save(interaction: discord.Interaction, member: discord.Member):
+async def stats(interaction: discord.Interaction, member: discord.Member):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
@@ -670,7 +664,8 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
             interaction.user.id,
             interaction.guild_id if bool(interaction.guild_id) else interaction.channel.id,
             message.id,
-            int(datetime.timestamp(message.created_at))
+            int(datetime.timestamp(message.created_at),
+            message.jump_url)
             )
 
         # # PluralKit check
@@ -749,5 +744,9 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 @sanford.event
 async def on_ready():
     logger.info(f"Logged in. I am {sanford.user} (ID: {sanford.user.id})")
+    logger.info("Syncing commands to Discord.")
+    await sanford.tree.sync()
+    await sanford.tree.sync(guild=TGC)
+    logger.info("Command syncing complete!")
 
 sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
