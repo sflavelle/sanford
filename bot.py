@@ -281,7 +281,7 @@ async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: boo
 quote_group = app_commands.Group(name='quote',description='Save or recall memorable messages')
 
 @quote_group.command(name="get")
-@app_commands.rename(expose_me="Fetch from ALL servers")
+@app_commands.rename(expose_me="all_servers")
 @app_commands.describe(	expose_me="When posting your own quotes in other servers, allow quotes from anywhere.")
 async def quote_get(interaction: discord.Interaction, user: discord.User=None, expose_me: bool = False):
     """Get a random quote!"""
