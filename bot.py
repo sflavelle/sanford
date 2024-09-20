@@ -388,7 +388,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
             interaction.user.id,
             interaction.guild_id if bool(interaction.guild_id) else interaction.channel.id,
             None,
-            int(datetime.timestamp(timestamp),
+            int(datetime.timestamp(timestamp)),
             message.jump_url)
         )
         
@@ -664,8 +664,8 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
             interaction.user.id,
             interaction.guild_id if bool(interaction.guild_id) else interaction.channel.id,
             message.id,
-            int(datetime.timestamp(message.created_at),
-            message.jump_url)
+            int(datetime.timestamp(message.created_at)),
+            message.jump_url
             )
 
         # # PluralKit check
