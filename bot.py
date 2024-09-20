@@ -389,7 +389,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
             interaction.guild_id if bool(interaction.guild_id) else interaction.channel.id,
             None,
             int(datetime.timestamp(timestamp)),
-            message.jump_url)
+            message.jump_url
         )
         
         qid,karma = insert_quote(sql_values)
