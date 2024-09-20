@@ -396,7 +396,7 @@ async def quote_sanitycheck(interaction: discord.Interaction, public: bool = Fal
                 user = cfg['postgresql']['user'],
                 password = cfg['postgresql']['password'],
         )
-            cur = con.cursor()
+        cur = con.cursor()
 
         cur.execute(sql_query)
         qtotal,qnullstamps,qnullsource,qnullids = cur.fetchone()
