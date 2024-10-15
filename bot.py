@@ -446,7 +446,8 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         if cfg['sanford']['quoting']['voting'] == True and interaction.is_guild_integration(): quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
         await interaction.response.send_message(
             embed=quote,
-            allowed_mentions=discord.AllowedMentions.none()
+            allowed_mentions=discord.AllowedMentions.none(),
+            ephemeral=author.id == interaction.user.id
             )
         
         if interaction.guild_id == 124680630075260928 and author.id not in cfg['mastodon']['exclude_users']:
@@ -753,7 +754,8 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 
         await interaction.response.send_message(
             embed=quote,
-            allowed_mentions=discord.AllowedMentions.none()
+            allowed_mentions=discord.AllowedMentions.none(),
+            ephemeral=message.author.id == interaction.user.id
             )
         
         #if interaction.guild_id == 124680630075260928 and message.author.id not in cfg['mastodon']['exclude_users']:
