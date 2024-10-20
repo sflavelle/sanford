@@ -286,7 +286,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, a
     """Get a random quote!"""
     
     try:
-        if bool(user) and all_servers and not interaction.user.id == "49288117307310080":
+        if bool(user) and all_servers and not interaction.user.id == 49288117307310080:
             if user.id != interaction.user.id:
                 await interaction.response.send_message(
                     ":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
@@ -312,7 +312,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, a
                 )
             return
         elif all_servers:
-            if interaction.user.id == "49288117307310080":
+            if interaction.user.id == 49288117307310080:
                 qid,content,aID,aName,timestamp,karma,source = random_quote(None, None)
             else:
                 await interaction.response.send_message(
