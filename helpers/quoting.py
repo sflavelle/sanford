@@ -86,7 +86,7 @@ def random_quote(gid: int = None,uid: int = None,sort_order: str = "random()"):
     if bool(uid): where_filter.append(f"authorid {('= ' + str(uid) + '') if type(uid) == int else ('= ' + str(uid[0]) + '') if len(uid) == 1 else ('=ANY ' +  str(uid))}")
 #    if bool(exclude_list): where_filter.append(f"authorid NOT IN ({str(exclude_list).strip('[]')})")
 
-    query = f"SELECT id,content,authorid,authorname,timestamp,karma,source FROM bot.quotes {'WHERE' + ' AND '.join(where_filter) if bool(uid) or bool(gid) else ''} ORDER BY {sort_order} LIMIT 1"
+    query = f"SELECT id,content,authorid,authorname,timestamp,karma,source FROM bot.quotes {'WHERE ' + ' AND '.join(where_filter) if bool(uid) or bool(gid) else ''} ORDER BY {sort_order} LIMIT 1"
     logger.debug(query)
     # Fetch a random quote from the SQL database
     try:
