@@ -314,12 +314,12 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
             return
         elif expose_me:
             if interaction.user.id == "49288117307310080":
-                    qid,content,aID,aName,timestamp,karma,source = random_quote(None, None)
-                else:
-                    await interaction.response.send_message(
-                    ":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
-                    ephemeral=True
-                    )
+                qid,content,aID,aName,timestamp,karma,source = random_quote(None, None)
+            else:
+                await interaction.response.send_message(
+                ":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
+                ephemeral=True
+                )
                 return
         else:
             qid,content,aID,aName,timestamp,karma,source = random_quote(interaction.guild_id, None)
