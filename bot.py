@@ -56,11 +56,11 @@ TGC = discord.Object(id=124680630075260928)
 
 # setup command framework
 sanford = commands.Bot(
-	command_prefix="&",
-	intents=intents,
-	allowed_contexts=app_commands.AppCommandContext(guild=True,dm_channel=True,private_channel=True),
-	allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
-	)
+    command_prefix="&",
+    intents=intents,
+    allowed_contexts=app_commands.AppCommandContext(guild=True,dm_channel=True,private_channel=True),
+    allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+    )
 
 # init Pluralkit API
 pluralkit = PK(cfg['sanford']['pluralkit_token'])
@@ -252,7 +252,7 @@ async def stampfinder_err(ctx, error):
 @app_commands.guilds(TGC)
 @app_commands.rename(exclude_in_mastoposter='dont_send_quotes')
 @app_commands.describe(	exclude_in_mastoposter="Exclude your quotes from being posted to @tgcooc?",
-			masto_alias="Set your name for when you are mentioned in a quote by @tgcooc.")
+            masto_alias="Set your name for when you are mentioned in a quote by @tgcooc.")
 async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: bool = None, masto_alias: str = None):
     """Configure settings relating to you in the @tgcooc Mastodon account."""
     global cfg
@@ -290,9 +290,9 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
         if bool(user) and expose_me:
             if user.id != interaction.user.id:
                 await interaction.response.send_message(
-                	":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
-                	ephemeral=True
-                	)
+                    ":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
+                    ephemeral=True
+                    )
                 return
             qid,content,aID,aName,timestamp,karma,source = random_quote(None, user.id)
         elif isinstance(interaction.channel, discord.abc.PrivateChannel) and bool(user):
@@ -305,21 +305,21 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
             # Which is totally fine, but I have to let the user know that they need to specify
             # who they want a quote of
             await interaction.response.send_message(
-            	":no_entry_sign: You'll need to specify a user when getting quotes in a private channel.\n"
-            	"This is because Discord doesn't support getting the list of users when you install the app to your account,"
-            	" which is *good* because it means apps like this one can't harvest your data willy-nilly!\n"
-            	"So for now, just remember to select a user you want a quote from.",
-            	ephemeral=True
-            	)
+                ":no_entry_sign: You'll need to specify a user when getting quotes in a private channel.\n"
+                "This is because Discord doesn't support getting the list of users when you install the app to your account,"
+                " which is *good* because it means apps like this one can't harvest your data willy-nilly!\n"
+                "So for now, just remember to select a user you want a quote from.",
+                ephemeral=True
+                )
             return
         elif expose_me:
-	        if interaction.user.id == "49288117307310080":
-                	qid,content,aID,aName,timestamp,karma,source = random_quote(None, None)
+            if interaction.user.id == "49288117307310080":
+                    qid,content,aID,aName,timestamp,karma,source = random_quote(None, None)
                 else:
-	                await interaction.response.send_message(
-                	":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
-                	ephemeral=True
-                	)
+                    await interaction.response.send_message(
+                    ":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
+                    ephemeral=True
+                    )
                 return
         else:
             qid,content,aID,aName,timestamp,karma,source = random_quote(interaction.guild_id, None)

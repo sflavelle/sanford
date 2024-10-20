@@ -8,5 +8,6 @@ class AddedQuoteHelpers(ui.View):
 
 class UpdateQuote(ui.Modal, title="Update quote details"):
     author = ui.UserSelect(custom_id='authorselect', )
-    content = ui.TextInput(label="Quoted text", required=True, style=discord.TextStyle.paragraph)
+    content = ui.TextInput(label="Quoted text", required=True, style=discord.TextStyle.paragraph, custom_id="content")
+    source = ui.TextInput(label="Quote Source (if applicable)", custom_id="source")
     
