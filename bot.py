@@ -290,7 +290,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
         if bool(user) and expose_me:
             if user.id != interaction.user.id:
                 await interaction.response.send_message(
-                	":no_entry_sign: Just FYI, `expose_me` will only work if you're exposing yourself.",
+                	":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
                 	ephemeral=True
                 	)
                 return
@@ -312,6 +312,15 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
             	ephemeral=True
             	)
             return
+        elif expose_me:
+	        if interaction.user.id == "49288117307310080":
+                	qid,content,aID,aName,timestamp,karma,source = random_quote(None, None)
+                else:
+	                await interaction.response.send_message(
+                	":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
+                	ephemeral=True
+                	)
+                return
         else:
             qid,content,aID,aName,timestamp,karma,source = random_quote(interaction.guild_id, None)
     except LookupError as error:

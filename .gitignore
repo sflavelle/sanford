@@ -2,6 +2,7 @@
 /config.yaml
 /logs
 /db
+sanford.db
 sanford.code-workspace
 **.pyc
 __pycache__
