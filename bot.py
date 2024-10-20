@@ -281,13 +281,12 @@ async def mastodon(interaction: discord.Interaction, exclude_in_mastoposter: boo
 quote_group = app_commands.Group(name='quote',description='Save or recall memorable messages')
 
 @quote_group.command(name="get")
-@app_commands.rename(expose_me="all_servers")
-@app_commands.describe(	expose_me="When posting your own quotes in other servers, allow quotes from anywhere.")
-async def quote_get(interaction: discord.Interaction, user: discord.User=None, expose_me: bool = False):
+@app_commands.describe(	all_servers="When posting your own quotes in other servers, allow quotes from anywhere.")
+async def quote_get(interaction: discord.Interaction, user: discord.User=None, all_servers: bool = False):
     """Get a random quote!"""
     
     try:
-        if bool(user) and expose_me:
+        if bool(user) and all_servers and not interaction.user.id == "49288117307310080":
             if user.id != interaction.user.id:
                 await interaction.response.send_message(
                     ":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
@@ -312,7 +311,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, e
                 ephemeral=True
                 )
             return
-        elif expose_me:
+        elif all_servers:
             if interaction.user.id == "49288117307310080":
                 qid,content,aID,aName,timestamp,karma,source = random_quote(None, None)
             else:
