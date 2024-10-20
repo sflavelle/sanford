@@ -71,7 +71,7 @@ def format_quote(content,timestamp,authorID=None,authorName=None,bot=None,source
 
 ### SQL FUNCTIONS
 
-def random_quote(gid: int,uid = None,sort_order: str = "random()"):
+def random_quote(gid: int = None,uid: int = None,sort_order: str = "random()"):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
@@ -86,7 +86,7 @@ def random_quote(gid: int,uid = None,sort_order: str = "random()"):
     if bool(uid): where_filter.append(f"authorid {('= ' + str(uid) + '') if type(uid) == int else ('= ' + str(uid[0]) + '') if len(uid) == 1 else ('=ANY ' +  str(uid))}")
 #    if bool(exclude_list): where_filter.append(f"authorid NOT IN ({str(exclude_list).strip('[]')})")
 
-    query = f"SELECT id,content,authorid,authorname,timestamp,karma,source FROM bot.quotes WHERE {' AND '.join(where_filter)} ORDER BY {sort_order} LIMIT 1"
+    query = f"SELECT id,content,authorid,authorname,timestamp,karma,source FROM bot.quotes {'WHERE' + ' AND '.join(where_filter) if bool(uid) or bool(gid)} ORDER BY {sort_order} LIMIT 1"
     logger.debug(query)
     # Fetch a random quote from the SQL database
     try:
