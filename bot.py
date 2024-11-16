@@ -17,6 +17,7 @@ from pluralkit import Client as PK
 import psycopg2
 from dateutil.parser import *
 import dateutil
+import validators
 # Import custom libraries
 from helpers.quoting import *
 # from mastoposter import post_new_quote # Semi-bork
@@ -439,7 +440,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
             interaction.guild_id if bool(interaction.guild_id) else interaction.channel.id,
             None,
             int(datetime.timestamp(timestamp)),
-            message.jump_url
+            source if validators.url(source) else None
         )
         
         qid,karma = insert_quote(sql_values)
@@ -449,6 +450,8 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
         
         quote = format_quote(content, authorID=author.id, authorName=author.name, timestamp=int(datetime.timestamp(timestamp)), format='discord_embed')
         quote.add_field(name='Status',value=f'Quote saved successfully.')
+        if bool(source) and not validators.url(source):
+            quote.add_field(name='Note',value=f'Value "{source}" for Source was not an URL and was therefore ignored.',inline=False)
         authorAvatar = author.display_avatar
         quote.set_thumbnail(url=authorAvatar.url)
         if cfg['sanford']['quoting']['voting'] == True and interaction.is_guild_integration(): quote.set_footer(text=f"Score: {'+' if karma > 0 else ''}{karma}. Voting is open for {qvote_timeout} minutes.")
@@ -763,7 +766,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         await interaction.response.send_message(
             embed=quote,
             allowed_mentions=discord.AllowedMentions.none(),
-            ephemeral=message.author.id == interaction.user.id
+            ephemeral=message.author.id == interaction.user.id and bool(interaction.guild_id)
             )
         
         #if interaction.guild_id == 124680630075260928 and message.author.id not in cfg['mastodon']['exclude_users']:

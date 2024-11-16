@@ -40,7 +40,7 @@ def format_quote(content,timestamp,authorID=None,authorName=None,bot=None,source
     # Else generate a date string
         date = datetime.fromtimestamp(timestamp)
         if format == "discord_embed" or format == "markdown":
-            dateprint = f"<t:{timestamp}:D>"
+            dateprint = f"<t:{int(timestamp)}:D>"
         else:
             dateprint = date.strftime("%B %d, %Y")
 
