@@ -13,7 +13,6 @@ import logging
 from systemd.journal import JournalHandler
 import traceback
 # Other helpful libraries
-from pluralkit import Client as PK
 import psycopg2
 from dateutil.parser import *
 import dateutil
@@ -62,9 +61,6 @@ sanford = commands.Bot(
     allowed_contexts=app_commands.AppCommandContext(guild=True,dm_channel=True,private_channel=True),
     allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
     )
-
-# init Pluralkit API
-pluralkit = PK(cfg['sanford']['pluralkit_token'])
 
 # various helpers
 def strfdelta(tdelta, fmt):
@@ -722,33 +718,6 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
             message.jump_url
             )
 
-        # # PluralKit check
-        if message.webhook_id:
-            try:
-                pkmsg = await pluralkit.get_message(message.id)
-                print(pkmsg)
-                if pkmsg is not None:
-                    sql_values[1] = int(pkmsg.sender)
-            except AttributeError as error:
-                logger.error("Fetching PluralKit author from message failed - message too old?")
-                try:
-                    logger.info("Trying to infer author from name substring...")
-                    pkauthor = message.author.name
-                    for k,v in cfg['sanford']['pluralkit_mapping'].items():
-                        if v in pkauthor:
-                            # Found our author!
-                            logger.info(f"Found 'em: Author is ID {k}")
-                            sql_values[1] = int(k)
-                            break
-                    else:
-                        raise KeyError("Could not find a user ID to map this message to.")
-                except KeyError as error:
-                    logger.error(f"Could not fetch webhook msg author for '{message.author.name}'")
-                    await interaction.response.send_message(error,ephemeral=True)
-                except TypeError as error:
-                    await interaction.response.send_message(error.with_traceback,ephemeral=True)
-                    logger.error("TypeError somewhere in the PK check code!", error)
-        
         qid,karma = insert_quote(sql_values)
         if karma == None: karma = 1
 
