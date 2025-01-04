@@ -713,7 +713,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         con.close()
 
         sql_values = (
-            strippedcontent,
+            strippedcontent if bool(strippedcontent) else message.content,
             message.author.id,
             message.author.name,
             interaction.user.id,
