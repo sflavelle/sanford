@@ -701,6 +701,11 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         )
         cur = con.cursor()
 
+        # Strip any mention from the beginning of the message
+        strippedcontent = None
+        if message.content.startswith('<@'):
+            strippedcontent = re.sub(r'^\s*<@!?[0-9]+>\s*', '', message.content)
+
         # Check for duplicates first
         cur.execute("SELECT 1 from bot.quotes WHERE msgID='" + str(message.id) + "'")
         if cur.fetchone() is not None:
@@ -708,7 +713,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
         con.close()
 
         sql_values = (
-            message.content, 
+            strippedcontent,
             message.author.id,
             message.author.name,
             interaction.user.id,
