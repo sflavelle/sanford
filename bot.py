@@ -812,5 +812,5 @@ def run_bot():
 if __name__ == "__main__":
     bot = threading.Thread(target=run_bot())
     bot.start()
-    bot.join()
     run_webapp()
+    bot.join()
