@@ -858,7 +858,7 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
                 source=quote[6]
             )]
         else:
-            return [Quote(
+            return sorted([Quote(
                 id=q[0],
                 content=q[1],
                 author_id=q[2],
@@ -866,7 +866,7 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
                 timestamp=q[4],
                 karma_score=q[5],
                 source=q[6]
-            ) for q in quote].sort(key=lambda x: x.id)
+            ) for q in quote], key=lambda x: x.id)
     except LookupError as err:
         if hasattr(err, "message"):
             return JSONResponse(status_code=404, content={"error": err.message})
