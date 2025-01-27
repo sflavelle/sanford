@@ -59,7 +59,7 @@ webapp = FastAPI(
     }
 )
 async def run_webapp():
-    webapp_config=uvicorn.Config("bot:webapp", port=8690)
+    webapp_config=uvicorn.Config("bot:webapp", host="0.0.0.0", port=8690)
     webapp_server=uvicorn.Server(webapp_config)
     await webapp_server.serve()
 
@@ -805,6 +805,9 @@ async def on_ready():
     await sanford.tree.sync(guild=TGC)
     logger.info("Command syncing complete!")
 
+async def run_bot():
+    await sanford.start(cfg['sanford']['discord_token'])
+
 if __name__ == "__main__":
     asyncio.run(run_webapp())
-    sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
+    asyncio.run(run_bot())
