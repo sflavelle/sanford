@@ -3,7 +3,7 @@
 import io
 import os
 import sys
-from multiprocessing import Process
+from contextlib import asynccontextmanager
 # Standard libraries
 import typing
 from datetime import timedelta, timezone
@@ -31,22 +31,17 @@ logger.addHandler(handler)
 # init vars?
 cfg = None
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(sanford.start(cfg["sanford"]["discord_token"]))
+    yield
+
 
 # load config
 with open('config.yaml', 'r') as file:
     cfg = yaml.safe_load(file)
 
 qvote_timeout = cfg['sanford']['quoting']['vote_timeout']
-
-# init database connection
-con = psycopg2.connect(
-    database = cfg['postgresql']['database'],
-    host = cfg['postgresql']['host'],
-    port = cfg['postgresql']['port'],
-    user = cfg['postgresql']['user'],
-    password = cfg['postgresql']['password'],
-    async_ = True
-)
 
 webapp = FastAPI(
     title="Sanford Discord Bot",
@@ -57,7 +52,8 @@ webapp = FastAPI(
         "name": "Simon Flavelle",
         "url": "https://fedi.neurario.com/@splatsune",
         "email": "me@neurario.com"
-    }
+    },
+    lifespan=lifespan
 )
 async def run_webapp():
     webapp_config=uvicorn.Config("bot:webapp", host="0.0.0.0", port=8690)
@@ -805,16 +801,3 @@ async def on_ready():
     await sanford.tree.sync()
     await sanford.tree.sync(guild=TGC)
     logger.info("Command syncing complete!")
-
-def run_bot():
-    sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
-
-def parallel_running(tasks):
-    running_tasks = [Process(target=task) for task in tasks]
-    for task in running_tasks:
-        task.start()
-    for task in running_tasks:
-        task.join()
-
-if __name__ == "__main__":
-    parallel_running([run_bot(), run_webapp()])

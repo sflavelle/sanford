@@ -5,14 +5,13 @@ import yaml
 import re
 import asyncio
 import logging
-from systemd.journal import JournalHandler
 
 with open('config.yaml', 'r') as file:
     cfg = yaml.safe_load(file)
 
 # setup logging
 logger = logging.getLogger('helpers')
-handler = JournalHandler()
+handler = logging.StreamHandler()
 logger.setLevel(logging.DEBUG)
 logger.addHandler(handler)
 
