@@ -9,13 +9,15 @@ import typing
 from datetime import timedelta, timezone
 
 import dateutil
-import uvicorn
 import validators
 from dateutil.parser import *
 from discord import app_commands
 from discord.ext import commands
-# Other helpful libraries
+
+# Web API libraries
 from fastapi import FastAPI
+import uvicorn
+from pydantic import BaseModel
 
 # Import custom libraries
 from helpers.quoting import *
@@ -75,6 +77,14 @@ sanford = commands.Bot(
     allowed_contexts=app_commands.AppCommandContext(guild=True,dm_channel=True,private_channel=True),
     allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
     )
+
+class Quote(BaseModel):
+    content: str
+    author_id: int
+    author_name: str | None = None
+    timestamp: int | None = None
+    karma_score: int
+    source: str | None = None
 
 # various helpers
 def strfdelta(tdelta, fmt):
@@ -792,7 +802,16 @@ async def web_root():
 
 @webapp.get("/quote/server/{server_id}")
 async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
-    return random_quote(server_id, user_id)
+    """Return a random quote from a server, optionally filtered by a user ID."""
+    quote = random_quote(server_id, user_id)
+    return Quote(
+        content=quote[1],
+        author_id=quote[2],
+        author_name=quote[3],
+        timestamp=quote[4],
+        karma_score=quote[5],
+        source=quote[6]
+    )
 
 @sanford.event
 async def on_ready():
