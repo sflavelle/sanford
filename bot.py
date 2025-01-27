@@ -821,7 +821,10 @@ async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
             source=quote[6]
         )
     except LookupError as err:
-        return JSONResponse(status_code=404, content={"error": err})
+        if hasattr(err, "message"):
+            return JSONResponse(status_code=404, content={"error": err.message})
+        else:
+            return JSONResponse(status_code=404, content={"error": str(err)})
 
 
 @sanford.event
