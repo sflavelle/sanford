@@ -811,6 +811,9 @@ def run_bot():
 
 if __name__ == "__main__":
     bot = threading.Thread(target=run_bot())
+    webapp = threading.Thread(target=asyncio.run(run_webapp()))
+
     bot.start()
-    asyncio.run(run_webapp())
+    webapp.start()
     bot.join()
+    webapp.join()
