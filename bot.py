@@ -838,7 +838,7 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
     try:
         quote = get_quote(server_id, user_id, sort_order="id asc" if bool(id) else "random()", limit=limit)
         if bool(id):
-            return [[Quote(
+            return [sorted([Quote(
                 id=q[0],
                 content=q[1],
                 author_id=q[2],
@@ -846,7 +846,7 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
                 timestamp=q[4],
                 karma_score=q[5],
                 source=q[6]
-            ) for q in quote][id]]
+            ) for q in quote], key=lambda x: x.id)[id]]
         if limit == 1:
             return [Quote(
                 id=quote[0],
