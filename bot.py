@@ -807,5 +807,4 @@ async def on_ready():
 
 if __name__ == "__main__":
     asyncio.run(run_webapp())
-
-sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
+    sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
