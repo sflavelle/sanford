@@ -5,4 +5,5 @@
 sanford.db
 sanford.code-workspace
 **.pyc
+.idea
 __pycache__
