@@ -6,4 +6,7 @@ python-magic==0.4.24
 pytz==2022.1
 PyYAML==6.0.1
 urllib3==1.26.5
-
+psycopg2~=2.9.10
+validators~=0.34.0
+systemd~=0.17.1
+fastapi~=0.115.7

@@ -503,7 +503,7 @@ async def quote_addbyhand(interaction: discord.Interaction, author: discord.Memb
 
 @quote_group.command(name="lb")
 async def quote_leaderboards(interaction: discord.Interaction):
-    '''Quote leaderboards!'''
+    """Quote leaderboards!"""
     leaderboard = discord.Embed(
         title=f"{interaction.guild.name} Quote Leaderboards",
         description=f"These are the rankings as of right now"
