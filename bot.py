@@ -1,30 +1,24 @@
 # Import essential libraries
 
-import discord
-from discord import app_commands,Colour
-from discord.ext import commands
-
-# Standard libraries
-import typing
-from datetime import datetime,timedelta,timezone
-import asyncio
-import yaml
-import sys
 import io
 import os
-import logging
-import traceback
+import sys
+# Standard libraries
+import typing
+from datetime import timedelta, timezone
 
-# Other helpful libraries
-import psycopg2
-from fastapi import FastAPI
-import uvicorn
-from dateutil.parser import *
 import dateutil
+import uvicorn
 import validators
+from dateutil.parser import *
+from discord import app_commands
+from discord.ext import commands
+# Other helpful libraries
+from fastapi import FastAPI
 
 # Import custom libraries
 from helpers.quoting import *
+
 # from mastoposter import post_new_quote # Semi-bork
 
 # setup logging
@@ -63,8 +57,12 @@ webapp = FastAPI(
         "url": "https://fedi.neurario.com/@splatsune",
         "email": "me@neurario.com"
     }
-
 )
+async def run_webapp():
+    webapp_config=uvicorn.Config("bot:webapp", port=8690)
+    webapp_server=uvicorn.Server(webapp_config)
+    await webapp_server.serve()
+
 
 # configure subscribed intents
 intents = discord.Intents.default()
@@ -806,5 +804,8 @@ async def on_ready():
     await sanford.tree.sync()
     await sanford.tree.sync(guild=TGC)
     logger.info("Command syncing complete!")
+
+if __name__ == "__main__":
+    asyncio.run(run_webapp())
 
 sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
