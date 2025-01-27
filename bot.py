@@ -801,7 +801,7 @@ async def web_root():
     return {"message": "Hello! Welcome to the Sanford API! Nothing's *really* here yet!"}
 
 @webapp.get("/quote/server/{server_id}")
-async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
+async def web_server_quote(server_id: int, user_id: int = None, id: int = None) -> Quote:
     """Return a random quote from a server, optionally filtered by a user ID."""
     quote = random_quote(server_id, user_id)
     return Quote(
