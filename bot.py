@@ -853,7 +853,7 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
                 karma_score=quote[5],
                 source=quote[6]
             )]
-        elif limit > 1:
+        else:
             return [Quote(
                 content=q[1],
                 author_id=q[2],
