@@ -13,12 +13,12 @@ import sys
 import io
 import os
 import logging
-from systemd.journal import JournalHandler
 import traceback
 
 # Other helpful libraries
 import psycopg2
 from fastapi import FastAPI
+import uvicorn
 from dateutil.parser import *
 import dateutil
 import validators
@@ -29,7 +29,7 @@ from helpers.quoting import *
 
 # setup logging
 logger = logging.getLogger('discord')
-handler = JournalHandler()
+handler = logging.StreamHandler()
 logger.setLevel(logging.INFO)
 logger.addHandler(handler)
 
