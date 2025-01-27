@@ -845,14 +845,14 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
                 source=q[6]
             ) for q in quote][id]
         if limit == 1:
-            return Quote(
+            return [Quote(
                 content=quote[1],
                 author_id=quote[2],
                 author_name=quote[3],
                 timestamp=quote[4],
                 karma_score=quote[5],
                 source=quote[6]
-            )
+            )]
         elif limit > 1:
             return [Quote(
                 content=q[1],
