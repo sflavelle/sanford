@@ -3,7 +3,7 @@
 import io
 import os
 import sys
-import threading
+from multiprocessing import Process
 # Standard libraries
 import typing
 from datetime import timedelta, timezone
@@ -809,11 +809,12 @@ async def on_ready():
 def run_bot():
     sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
 
-if __name__ == "__main__":
-    bot = threading.Thread(target=run_bot())
-    webapp = threading.Thread(target=asyncio.run(run_webapp()))
+def parallel_running(tasks):
+    running_tasks = [Process(target=task) for task in tasks]
+    for task in running_tasks:
+        task.start()
+    for task in running_tasks:
+        task.join()
 
-    bot.start()
-    webapp.start()
-    bot.join()
-    webapp.join()
+if __name__ == "__main__":
+    parallel_running([run_bot(), run_webapp()])
