@@ -3,6 +3,7 @@
 import io
 import os
 import sys
+import threading
 # Standard libraries
 import typing
 from datetime import timedelta, timezone
@@ -58,10 +59,10 @@ webapp = FastAPI(
         "email": "me@neurario.com"
     }
 )
-async def run_webapp():
+def run_webapp():
     webapp_config=uvicorn.Config("bot:webapp", host="0.0.0.0", port=8690)
     webapp_server=uvicorn.Server(webapp_config)
-    await webapp_server.serve()
+    webapp_server.serve()
 
 
 # configure subscribed intents
@@ -805,9 +806,14 @@ async def on_ready():
     await sanford.tree.sync(guild=TGC)
     logger.info("Command syncing complete!")
 
-async def run_bot():
-    await sanford.start(cfg['sanford']['discord_token'])
+def run_bot():
+    sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
 
-if __name__ == "__main__":
-    asyncio.run(run_webapp())
-    asyncio.run(run_bot())
+webapp = threading.Thread(target=run_webapp())
+bot = threading.Thread(target=run_bot())
+
+webapp.start()
+bot.start()
+
+webapp.join()
+bot.join()
