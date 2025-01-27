@@ -827,7 +827,7 @@ async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
             return JSONResponse(status_code=404, content={"error": str(err)})
 
 @webapp.get("/quote/user/{user_id}", response_model=list[Quote], responses={404: {"model": Error}})
-async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, limit: int = 1):
+async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, limit: int = None):
     """Return a random quote from a user, optionally filtered by a server ID. You can return more than one quote by passing a `limit`."""
 
     if bool(limit) and bool(id):
@@ -836,6 +836,8 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
     limit = limit
     if bool(id):
         limit = None
+    elif not limit > 1:
+        limit = 1
     try:
         quote = get_quote(server_id, user_id, sort_order="rowid asc" if bool(id) else "random()", limit=limit)
         if bool(id):
