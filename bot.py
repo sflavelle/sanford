@@ -813,7 +813,7 @@ async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
     """Return a random quote from a server, optionally filtered by a user ID."""
     try:
         quote = get_quote(server_id, user_id)
-        return Quote(
+        return [Quote(
             id=quote[0],
             content=quote[1],
             author_id=quote[2],
@@ -821,7 +821,7 @@ async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
             timestamp=quote[4],
             karma_score=quote[5],
             source=quote[6]
-        )
+        )]
     except LookupError as err:
         if hasattr(err, "message"):
             return JSONResponse(status_code=404, content={"error": err.message})
