@@ -18,6 +18,7 @@ from discord.ext import commands
 from fastapi import FastAPI
 import uvicorn
 from pydantic import BaseModel
+from starlette.responses import JSONResponse
 
 # Import custom libraries
 from helpers.quoting import *
@@ -78,6 +79,8 @@ sanford = commands.Bot(
     allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
     )
 
+# define API models
+
 class Quote(BaseModel):
     content: str
     author_id: int
@@ -85,6 +88,10 @@ class Quote(BaseModel):
     timestamp: int | None = None
     karma_score: int
     source: str | None = None
+
+class Error(BaseModel):
+    error: str
+
 
 # various helpers
 def strfdelta(tdelta, fmt):
@@ -800,18 +807,22 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 async def web_root():
     return {"message": "Hello! Welcome to the Sanford API! Nothing's *really* here yet!"}
 
-@webapp.get("/quote/server/{server_id}")
-async def web_server_quote(server_id: int, user_id: int = None, id: int = None) -> Quote:
+@webapp.get("/quote/server/{server_id}", response_model=Quote, responses={404: {"model": Error}})
+async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
     """Return a random quote from a server, optionally filtered by a user ID."""
-    quote = random_quote(server_id, user_id)
-    return Quote(
-        content=quote[1],
-        author_id=quote[2],
-        author_name=quote[3],
-        timestamp=quote[4],
-        karma_score=quote[5],
-        source=quote[6]
-    )
+    try:
+        quote = random_quote(server_id, user_id)
+        return Quote(
+            content=quote[1],
+            author_id=quote[2],
+            author_name=quote[3],
+            timestamp=quote[4],
+            karma_score=quote[5],
+            source=quote[6]
+        )
+    except LookupError as err:
+        return JSONResponse(status_code=404, content={"error": err})
+
 
 @sanford.event
 async def on_ready():
