@@ -839,7 +839,7 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
     elif not limit > 1:
         limit = 1
     try:
-        quote = get_quote(server_id, user_id, sort_order="rowid asc" if bool(id) else "random()", limit=limit)
+        quote = get_quote(server_id, user_id, sort_order="id asc" if bool(id) else "random()", limit=limit)
         if bool(id):
             return [Quote(
                 content=q[1],
