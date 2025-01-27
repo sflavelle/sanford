@@ -801,3 +801,6 @@ async def on_ready():
     await sanford.tree.sync()
     await sanford.tree.sync(guild=TGC)
     logger.info("Command syncing complete!")
+
+if __name__ == "__main__":
+    asyncio.run(run_webapp())
