@@ -807,7 +807,7 @@ async def quote_save(interaction: discord.Interaction, message: discord.Message)
 async def web_root():
     return {"message": "Hello! Welcome to the Sanford API! Nothing's *really* here yet!"}
 
-@webapp.get("/quote/server/{server_id}", response_model=Quote, responses={404: {"model": Error}})
+@webapp.get("/quote/server/{server_id}", response_model=list[Quote], responses={404: {"model": Error}})
 async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
     """Return a random quote from a server, optionally filtered by a user ID."""
     try:
@@ -826,7 +826,7 @@ async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
         else:
             return JSONResponse(status_code=404, content={"error": str(err)})
 
-@webapp.get("/quote/user/{user_id}", response_model=Quote, responses={404: {"model": Error}})
+@webapp.get("/quote/user/{user_id}", response_model=list[Quote], responses={404: {"model": Error}})
 async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, limit: int = 1):
     """Return a random quote from a user, optionally filtered by a server ID. You can return more than one quote by passing a `limit`."""
 
