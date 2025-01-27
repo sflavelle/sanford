@@ -59,10 +59,10 @@ webapp = FastAPI(
         "email": "me@neurario.com"
     }
 )
-def run_webapp():
+async def run_webapp():
     webapp_config=uvicorn.Config("bot:webapp", host="0.0.0.0", port=8690)
     webapp_server=uvicorn.Server(webapp_config)
-    webapp_server.serve()
+    await webapp_server.serve()
 
 
 # configure subscribed intents
@@ -809,11 +809,8 @@ async def on_ready():
 def run_bot():
     sanford.run(cfg['sanford']['discord_token'], log_handler=handler)
 
-webapp = threading.Thread(target=run_webapp())
-bot = threading.Thread(target=run_bot())
-
-webapp.start()
-bot.start()
-
-webapp.join()
-bot.join()
+if __name__ == "__main__":
+    bot = threading.Thread(target=run_bot())
+    bot.start()
+    bot.join()
+    run_webapp()
