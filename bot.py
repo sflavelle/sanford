@@ -321,11 +321,11 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, a
                     ephemeral=True
                     )
                 return
-            qid,content,aID,aName,timestamp,karma,source = random_quote(None, user.id)
+            qid,content,aID,aName,timestamp,karma,source = get_quote(None, user.id)
         elif isinstance(interaction.channel, discord.abc.PrivateChannel) and bool(user):
-            qid,content,aID,aName,timestamp,karma,source = random_quote(None, user.id)
+            qid,content,aID,aName,timestamp,karma,source = get_quote(None, user.id)
         elif bool(user):
-            qid,content,aID,aName,timestamp,karma,source = random_quote(interaction.guild_id, user.id)
+            qid,content,aID,aName,timestamp,karma,source = get_quote(interaction.guild_id, user.id)
         elif isinstance(interaction.channel, discord.abc.PrivateChannel):
             # Discord can't support this for user apps!
             # Reason being, it cannot access the list of recipients in a channel, in a user app context
@@ -341,7 +341,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, a
             return
         elif all_servers:
             if interaction.user.id == 49288117307310080:
-                qid,content,aID,aName,timestamp,karma,source = random_quote(None, None)
+                qid,content,aID,aName,timestamp,karma,source = get_quote(None, None)
             else:
                 await interaction.response.send_message(
                 ":no_entry_sign: Just FYI, `all_servers` will only work if you're exposing yourself.",
@@ -349,7 +349,7 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, a
                 )
                 return
         else:
-            qid,content,aID,aName,timestamp,karma,source = random_quote(interaction.guild_id, None)
+            qid,content,aID,aName,timestamp,karma,source = get_quote(interaction.guild_id, None)
     except LookupError as error:
         await interaction.response.send_message(str(error), ephemeral=True)
         return
@@ -811,7 +811,7 @@ async def web_root():
 async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
     """Return a random quote from a server, optionally filtered by a user ID."""
     try:
-        quote = random_quote(server_id, user_id)
+        quote = get_quote(server_id, user_id)
         return Quote(
             content=quote[1],
             author_id=quote[2],
@@ -820,6 +820,51 @@ async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
             karma_score=quote[5],
             source=quote[6]
         )
+    except LookupError as err:
+        if hasattr(err, "message"):
+            return JSONResponse(status_code=404, content={"error": err.message})
+        else:
+            return JSONResponse(status_code=404, content={"error": str(err)})
+
+@webapp.get("/quote/user/{user_id}", response_model=Quote, responses={404: {"model": Error}})
+async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, limit: int = 1):
+    """Return a random quote from a user, optionally filtered by a server ID. You can return more than one quote by passing a `limit`."""
+
+    if bool(limit) and bool(id):
+        return JSONResponse(status_code=404, content={"error": "`limit` and `id` are mutually exclusive."})
+
+    limit = limit
+    if bool(id):
+        limit = None
+    try:
+        quote = get_quote(server_id, user_id, sort_order="rowid asc" if bool(id) else "random()", limit=limit)
+        if bool(id):
+            return [Quote(
+                content=q[1],
+                author_id=q[2],
+                author_name=q[3],
+                timestamp=q[4],
+                karma_score=q[5],
+                source=q[6]
+            ) for q in quote][id]
+        if limit == 1:
+            return Quote(
+                content=quote[1],
+                author_id=quote[2],
+                author_name=quote[3],
+                timestamp=quote[4],
+                karma_score=quote[5],
+                source=quote[6]
+            )
+        elif limit > 1:
+            return [Quote(
+                content=q[1],
+                author_id=q[2],
+                author_name=q[3],
+                timestamp=q[4],
+                karma_score=q[5],
+                source=q[6]
+            ) for q in quote]
     except LookupError as err:
         if hasattr(err, "message"):
             return JSONResponse(status_code=404, content={"error": err.message})

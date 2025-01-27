@@ -70,7 +70,7 @@ def format_quote(content,timestamp,authorID=None,authorName=None,bot=None,source
 
 ### SQL FUNCTIONS
 
-def random_quote(gid: int = None,uid: int = None,sort_order: str = "random()"):
+def get_quote(gid: int = None, uid: int = None, sort_order: str = "random()", limit: int = 1):
     con = psycopg2.connect(
         database = cfg['postgresql']['database'],
         host = cfg['postgresql']['host'],
@@ -85,18 +85,22 @@ def random_quote(gid: int = None,uid: int = None,sort_order: str = "random()"):
     if bool(uid): where_filter.append(f"authorid {('= ' + str(uid) + '') if type(uid) == int else ('= ' + str(uid[0]) + '') if len(uid) == 1 else ('=ANY ' +  str(uid))}")
 #    if bool(exclude_list): where_filter.append(f"authorid NOT IN ({str(exclude_list).strip('[]')})")
 
-    query = f"SELECT id,content,authorid,authorname,timestamp,karma,source FROM bot.quotes {'WHERE ' + ' AND '.join(where_filter) if bool(uid) or bool(gid) else ''} ORDER BY {sort_order} LIMIT 1"
+    query = f"SELECT id,content,authorid,authorname,timestamp,karma,source FROM bot.quotes {'WHERE ' + ' AND '.join(where_filter) if bool(uid) or bool(gid) else ''} ORDER BY {sort_order} {f"LIMIT {limit}" if bool(limit) else ""}"
     logger.debug(query)
     # Fetch a random quote from the SQL database
     try:
         cur.execute(query)
-        id,content,aID,aName,timestamp,karma,source = cur.fetchone()
+        result = [[q[0],q[1],q[2],q[3],q[4],q[5],q[6]] for q in cur.fetchall()]
     except TypeError as error:
         if bool(uid) and "NoneType object" in str(error):
             raise LookupError("Sorry, that user doesn't have any quotes saved in this server yet!")
-    cur.close()
-    con.close()
-    return (id, content, aID, aName, timestamp, karma, source)
+    finally:
+        cur.close()
+        con.close()
+    if len(result) == 1:
+        return result[0]
+    else:
+        return result
 
 def insert_quote(quote_data: tuple):
     con = psycopg2.connect(
