@@ -82,6 +82,7 @@ sanford = commands.Bot(
 # define API models
 
 class Quote(BaseModel):
+    id: int
     content: str
     author_id: int
     author_name: str | None = None
@@ -813,6 +814,7 @@ async def web_server_quote(server_id: int, user_id: int = None, id: int = None):
     try:
         quote = get_quote(server_id, user_id)
         return Quote(
+            id=q[0],
             content=quote[1],
             author_id=quote[2],
             author_name=quote[3],
@@ -837,6 +839,7 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
         quote = get_quote(server_id, user_id, sort_order="id asc" if bool(id) else "random()", limit=limit)
         if bool(id):
             return [[Quote(
+                id=q[0],
                 content=q[1],
                 author_id=q[2],
                 author_name=q[3],
@@ -846,6 +849,7 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
             ) for q in quote][id]]
         if limit == 1:
             return [Quote(
+                id=q[0],
                 content=quote[1],
                 author_id=quote[2],
                 author_name=quote[3],
@@ -855,13 +859,14 @@ async def web_user_quotes(user_id: int, server_id: int = None, id: int = None, l
             )]
         else:
             return [Quote(
+                id=q[0],
                 content=q[1],
                 author_id=q[2],
                 author_name=q[3],
                 timestamp=q[4],
                 karma_score=q[5],
                 source=q[6]
-            ) for q in quote]
+            ) for q in quote].sort(key=lambda x: x.id)
     except LookupError as err:
         if hasattr(err, "message"):
             return JSONResponse(status_code=404, content={"error": err.message})
