@@ -357,6 +357,11 @@ async def quote_get(interaction: discord.Interaction, user: discord.User=None, a
     except Exception as error:
         logger.exception(error)
         return
+    except ValueError as error:
+        if "not enough values to unpack" in str(error) and "got 0" in str(error):
+            # Nothing came back - most likely no quotes matching that filter
+            errmsg = ":no_entry_sign: Got nothing. It's possible that:\n- Nothing matches the filter you specified\n- If you didn't filter at all, this server may not have quotes yet!"
+            await interaction.response.send_message(errmsg, ephemeral=True)
 
     # Is the user still in the server?
     authorObject = None
